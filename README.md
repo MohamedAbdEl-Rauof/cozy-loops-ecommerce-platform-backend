@@ -16,6 +16,7 @@ Backend API for the Cozy Loops E-commerce platform built with Node.js, Express, 
 - Secure API endpoints with rate limiting
 - Comprehensive error handling
 - Input validation and sanitization
+- Nodemailer for Email Verification Service
 
 ## Getting Started
 
