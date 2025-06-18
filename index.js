@@ -4,6 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const connectDB = require('./src/config/database');
+const authRoutes = require('./src/routes/authRoutes');
+const cookieParser = require('cookie-parser'); 
 
 // Load environment variables
 dotenv.config();
@@ -21,9 +23,12 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Cookie parser middleware 
+app.use(cookieParser());
+
 // CORS middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL,
   credentials: true
 }));
 
@@ -41,6 +46,7 @@ const reviewRoutes = require('./src/routes/reviewRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
 
 // Mount routes
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
