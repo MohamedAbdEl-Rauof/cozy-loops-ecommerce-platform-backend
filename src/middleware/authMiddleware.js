@@ -31,17 +31,44 @@ exports.protect = async (req, res, next) => {
       req.user = await User.findById(decoded.id).select('-password');
       
       if (!req.user) {
-        return res.status(401).json({ message: 'User not found' });
+        return res.status(401).json({ message: 'Not authorized, user not found' });
       }
       
+      // Check if user is active
+      if (!user.active) {
+        return res.status(401).json({ message: 'User account is deactivated' });
+      }
+      
+      // Add user to request object
+      req.user = user;
       next();
     } catch (error) {
       console.error('Token verification error:', error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      
+      // Check if token is expired
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ 
+          message: 'Token expired',
+          tokenExpired: true
+        });
+      }
+      
+      return res.status(401).json({ message: 'Not authorized, invalid token' });
     }
   } catch (error) {
     console.error('Auth middleware error:', error);
     res.status(500).json({ message: 'Server error in authentication' });
+  }
+};
+
+/**
+ * Admin only middleware
+ */
+exports.admin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized as an admin' });
   }
 };
 
