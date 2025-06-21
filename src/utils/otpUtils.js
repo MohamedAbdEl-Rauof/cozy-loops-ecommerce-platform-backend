@@ -22,9 +22,9 @@ exports.hashOTP = async (otp) => {
 
 /**
  * Verify OTP
- * @param {String} plainOTP - Plain OTP provided by user
- * @param {String} hashedOTP - Hashed OTP from database
- * @returns {Boolean} True if OTP matches
+ * @param {String} plainOTP 
+ * @param {String} hashedOTP 
+ * @returns {Boolean} 
  */
 exports.verifyOTP = async (plainOTP, hashedOTP) => {
   return await bcrypt.compare(plainOTP, hashedOTP);

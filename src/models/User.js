@@ -82,7 +82,7 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpire: Date,
   Avatar: {
     type: String,
-    default: 'https://example.com/default-avatar.png' 
+    default: 'https://media.istockphoto.com/id/1337144146/vector/default-avatar-profile-icon-vector.jpg?s=612x612&w=0&k=20&c=BIbFwuv7FxTWvh5S3vB6bkT0Qv8Vn8N5Ffseq84ClGI=' 
   },
   otp: {
     code : {

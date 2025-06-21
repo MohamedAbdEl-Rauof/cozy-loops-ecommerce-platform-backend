@@ -143,14 +143,14 @@ exports.verifyEmail = async (req, res) => {
 
       // Redirect to frontend with tokens
       const redirectUrl = user.role === 'admin' 
-        ? `${process.env.USER_FRONTEND_URL}/dashboard?token=${accessToken}`
-        : `${process.env.ADMIN_FRONTEND_URL}/dashboard?token=${accessToken}`;
+        ? `${process.env.USER_FRONTEND_URL}?token=${accessToken}`
+        : `${process.env.ADMIN_FRONTEND_URL}?token=${accessToken}`;
       
       return res.redirect(redirectUrl);
     }
     
     // If no direct login, just redirect to login page
-    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
+    return res.redirect(`${process.env.USER_FRONTEND_URL}/login?verified=true`);
   } catch (error) {
     console.error('Email verification error:', error);
     res.status(500).json({ message: 'Server error during email verification' });
@@ -219,9 +219,6 @@ exports.resendVerification = async (req, res) => {
   }
 };
 
-
-// Update the login function:
-
 /**
  * Login user
  * @route POST /api/auth/login
@@ -251,7 +248,6 @@ exports.login = async (req, res) => {
           role: 'admin',
           emailVerified: true
         });
-        console.log('Admin user created successfully');
       } else if (admin.role !== 'admin') {
         // Ensure user has admin role
         admin.role = 'admin';
@@ -259,7 +255,7 @@ exports.login = async (req, res) => {
         await admin.save();
       }
       
-      // Generate tokens for admin - FIX: Pass payload object instead of just ID
+      // Generate tokens for admin 
       const accessToken = generateAccessToken({
         id: admin._id.toString(),
         role: admin.role
@@ -329,7 +325,7 @@ exports.login = async (req, res) => {
       });
     }
     
-    // Generate tokens - FIX: Pass payload object instead of just ID
+    // Generate tokens 
     const accessToken = generateAccessToken({
       id: user._id.toString(),
       role: user.role
