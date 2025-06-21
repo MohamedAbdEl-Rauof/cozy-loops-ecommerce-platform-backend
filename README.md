@@ -16,7 +16,7 @@ Backend API for the Cozy Loops E-commerce platform built with Node.js, Express, 
 - Secure API endpoints with rate limiting
 - Comprehensive error handling
 - Input validation and sanitization
-- Nodemailer for Email Verification Service
+- Nodemailer and Gmail SMTP for email verivation
 
 ## Getting Started
 
@@ -83,10 +83,12 @@ The database schema can be viewed in this [Entity Relationship Diagram](https://
 
 ### Authentication
 
-- `POST /api/users/register` - Register a new user
-- `POST /api/users/login` - Login and get access token
-- `POST /api/users/logout` - Logout and invalidate token
-- `POST /api/users/refresh-token` - Get new access token using refresh token
+- `POST /api/auth/register` - Register a new user
+- `GET /api/auth/verify-email` - Verify user email
+- `POST /api/auth/resnd-verification` - Resend email verification link
+- `POST /api/auth/login` - Login and get access token
+- `POST /api/auth/logout` - Logout and invalidate token
+- `POST /api/auth/refresh-token` - Get new access token using refresh token
 
 ### Users
 

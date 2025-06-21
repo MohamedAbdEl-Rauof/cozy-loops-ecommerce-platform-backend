@@ -71,13 +71,29 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  emailVerificationToken: String,
+  emailVerificationExpire: Date,
   active: {
     type: Boolean,
     default: true
   },
   refreshToken: String,
   resetPasswordToken: String,
-  resetPasswordExpire: Date
+  resetPasswordExpire: Date,
+  Avatar: {
+    type: String,
+    default: 'https://media.istockphoto.com/id/1337144146/vector/default-avatar-profile-icon-vector.jpg?s=612x612&w=0&k=20&c=BIbFwuv7FxTWvh5S3vB6bkT0Qv8Vn8N5Ffseq84ClGI=' 
+  },
+  otp: {
+    code : {
+      type: String,
+     select: false
+    },
+    expiresAt: {
+      type: Date,
+      select: false
+    }
+  },
 }, {
   timestamps: true
 });
@@ -109,7 +125,7 @@ userSchema.methods.createPasswordResetToken = function() {
     .update(resetToken)
     .digest('hex');
     
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; 
   
   return resetToken;
 };
