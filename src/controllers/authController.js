@@ -101,6 +101,7 @@ exports.register = async (req, res) => {
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
+    const directLogin = req.query.directLogin === 'true';
     
     // Find user with matching verification token and not expired
     const user = await User.findOne({
@@ -121,14 +122,32 @@ exports.verifyEmail = async (req, res) => {
     
     await user.save();
     
-    // Redirect to frontend or return success
-    if (req.query.redirect === 'true') {
-      return res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
+    // If direct login is requested, generate tokens and log in the user
+    if (directLogin) {
+      // Generate tokens
+      const accessToken = generateAccessToken({
+        id: user._id,
+        role: user.role
+      });
+
+      const refreshToken = generateRefreshToken({
+        id: user._id
+      });
+
+      // Save refresh token to user
+      user.refreshToken = refreshToken;
+      await user.save();
+
+      // Redirect to frontend with tokens
+      const redirectUrl = user.role === 'admin' 
+        ? `${process.env.USER_FRONTEND_URL}/dashboard?token=${accessToken}`
+        : `${process.env.ADMIN_FRONTEND_URL}/dashboard?token=${accessToken}`;
+      
+      return res.redirect(redirectUrl);
     }
     
-    res.status(200).json({ 
-      message: 'Email verified successfully. You can now log in.' 
-    });
+    // If no direct login, just redirect to login page
+    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
   } catch (error) {
     console.error('Email verification error:', error);
     res.status(500).json({ message: 'Server error during email verification' });

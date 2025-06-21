@@ -9,7 +9,7 @@ router.post('/register', registerValidation, authController.register);
 
 // Verify email
 router.get('/verify-email/:token', authController.verifyEmail);
-
+    
 // Resend verification email
 router.post('/resend-verification', authController.resendVerification);
 

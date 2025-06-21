@@ -42,7 +42,8 @@ const orderSchema = new mongoose.Schema({
   orderNumber: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    index: true
   },
   status: {
     type: String,

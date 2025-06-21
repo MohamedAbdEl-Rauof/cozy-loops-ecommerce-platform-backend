@@ -2,42 +2,41 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 /**
- * Create email transporter
- * @returns {Object} Nodemailer transporter
+ * Create email transporter using Gmail SMTP
  */
 const createTransporter = () => {
-  // For development/testing, use Mailtrap or similar service
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.mailtrap.io',
-    port: process.env.EMAIL_PORT || 2525,
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    secure: false, 
     auth: {
       user: process.env.EMAIL_USERNAME,
       pass: process.env.EMAIL_PASSWORD
+    },
+    tls: {
+      rejectUnauthorized: false 
     }
   });
 };
 
 /**
  * Send email
- * @param {Object} options - Email options
- * @returns {Promise} Email sending result
  */
 const sendEmail = async (options) => {
   const transporter = createTransporter();
-  
+
   const mailOptions = {
-    from: `Cozy Loops <${process.env.EMAIL_FROM || 'noreply@cozyloops.com'}>`,
+    from: process.env.EMAIL_FROM,
     to: options.to,
     subject: options.subject,
     html: options.html
   };
-  
-  return await transporter.sendMail(mailOptions);
+
+  await transporter.sendMail(mailOptions);
 };
 
 /**
  * Generate verification token
- * @returns {String} Verification token
  */
 const generateVerificationToken = () => {
   return crypto.randomBytes(32).toString('hex');
@@ -45,8 +44,6 @@ const generateVerificationToken = () => {
 
 /**
  * Create verification URL
- * @param {String} token - Verification token
- * @returns {String} Verification URL
  */
 const createVerificationUrl = (token) => {
   return `${process.env.FRONTEND_URL}/verify-email/${token}`;
@@ -54,9 +51,6 @@ const createVerificationUrl = (token) => {
 
 /**
  * Create verification email HTML
- * @param {String} firstName - User's first name
- * @param {String} verificationUrl - Verification URL
- * @returns {String} Email HTML content
  */
 const createVerificationEmailHtml = (firstName, verificationUrl) => {
   return `
