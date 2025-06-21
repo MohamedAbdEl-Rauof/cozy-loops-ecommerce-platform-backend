@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
 const User = require('../models/User');
-const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwtUtils');
+const { generateAccessToken, generateRefreshToken, verifyToken,setTokenCookies } = require('../utils/jwtUtils');
 const {
   sendEmail,
   generateVerificationToken,
@@ -216,6 +216,7 @@ exports.resendVerification = async (req, res) => {
   }
 };
 
+
 /**
  * Login user
  * @route POST /api/auth/login
@@ -223,66 +224,114 @@ exports.resendVerification = async (req, res) => {
  */
 exports.login = async (req, res) => {
   try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email }).select('+password');
-
-    // Check if user exists
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    // Check if email is verified
-    if (!user.emailVerified) {
-      return res.status(401).json({
-        message: 'Please verify your email before logging in',
-        isVerified: false
+    // Check for admin login using environment variables
+    if (
+      process.env.ADMIN_EMAIL &&
+      process.env.ADMIN_PASSWORD &&
+      email === process.env.ADMIN_EMAIL &&
+      password === process.env.ADMIN_PASSWORD
+    ) {
+      // Find or create admin user
+      let admin = await User.findOne({ email: process.env.ADMIN_EMAIL });
+      
+      if (!admin) {
+        // Create admin user if it doesn't exist
+        admin = await User.create({
+          firstName: 'Admin',
+          lastName: 'User',
+          email: process.env.ADMIN_EMAIL,
+          password: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12),
+          role: 'admin',
+          emailVerified: true
+        });
+        console.log('Admin user created successfully');
+      } else if (admin.role !== 'admin') {
+        // Ensure user has admin role
+        admin.role = 'admin';
+        admin.emailVerified = true;
+        await admin.save();
+      }
+      
+      // Generate tokens for admin
+      const accessToken = generateAccessToken(admin._id);
+      const refreshToken = generateRefreshToken(admin._id);
+      
+      // Save refresh token to admin user
+      admin.refreshToken = refreshToken;
+      await admin.save();
+      
+      // Set cookies
+      setTokenCookies(res, accessToken, refreshToken);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Admin login successful',
+        user: {
+          id: admin._id,
+          firstName: admin.firstName,
+          lastName: admin.lastName,
+          email: admin.email,
+          role: admin.role
+        },
+        accessToken,
+        refreshToken
       });
     }
-
-    // Check if password matches
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    
+    // Regular user login
+    const user = await User.findOne({ email }).select('+password');
+    
+    // Check if user exists
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
     }
-
+    
+    // Check if password is correct
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+    
+    // Check if email is verified
+    if (!user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Email not verified. Please verify your email before logging in.',
+        emailVerified: false,
+        userId: user._id
+      });
+    }
+    
+    // Check if user is active
+    if (!user.active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact support.'
+      });
+    }
+    
     // Generate tokens
-    const accessToken = generateAccessToken({
-      id: user._id,
-      role: user.role
-    });
-
-    const refreshToken = generateRefreshToken({
-      id: user._id
-    });
-
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    
     // Save refresh token to user
     user.refreshToken = refreshToken;
     await user.save();
-
+    
     // Set cookies
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-
-    res.status(200).json({
+    setTokenCookies(res, accessToken, refreshToken);
+    
+    // Return success response
+    return res.status(200).json({
+      success: true,
       message: 'Login successful',
       user: {
         id: user._id,
@@ -291,11 +340,16 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role
       },
-      accessToken
+      accessToken,
+      refreshToken
     });
+    
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during login'
+    });
   }
 };
 
@@ -344,7 +398,7 @@ exports.refreshToken = async (req, res) => {
       // Verify refresh token
       const decoded = verifyToken(
         refreshToken, 
-        process.env.JWT_REFRESH_SECRET || 'refresh_secret_key_change_in_production'
+        process.env.JWT_REFRESH_SECRET 
       );
       
       // Find user with matching refresh token
@@ -368,7 +422,7 @@ exports.refreshToken = async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 15 * 60 * 1000 // 15 minutes
+        maxAge: 15 * 60 * 1000 
       });
       
       res.status(200).json({
