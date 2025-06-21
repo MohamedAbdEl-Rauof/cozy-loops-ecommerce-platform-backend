@@ -79,7 +79,21 @@ const userSchema = new mongoose.Schema({
   },
   refreshToken: String,
   resetPasswordToken: String,
-  resetPasswordExpire: Date
+  resetPasswordExpire: Date,
+  Avatar: {
+    type: String,
+    default: 'https://example.com/default-avatar.png' 
+  },
+  otp: {
+    code : {
+      type: String,
+     select: false
+    },
+    expiresAt: {
+      type: Date,
+      select: false
+    }
+  },
 }, {
   timestamps: true
 });

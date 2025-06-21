@@ -6,6 +6,10 @@ const jwt = require('jsonwebtoken');
  * @returns {String}  Access token
  */
 const generateAccessToken = (payload) => {
+  // Check if payload is provided
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Payload must be a plain object');
+  }
   return jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
     expiresIn: process.env.JWT_ACCESS_EXPIRES_IN 
   });
@@ -17,6 +21,10 @@ const generateAccessToken = (payload) => {
  * @returns {String} Refresh token
  */
 const generateRefreshToken = (payload) => {
+  // Check if payload is provided
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Payload must be a plain object');
+  }
   return jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN 
   });

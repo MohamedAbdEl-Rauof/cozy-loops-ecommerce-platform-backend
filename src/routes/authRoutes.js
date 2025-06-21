@@ -19,13 +19,16 @@ router.post('/login', loginValidation, authController.login);
 // Logout user (protected route)
 router.post('/logout', protect, authController.logout);
 
-// Refresh access token - Make sure this function exists in authController
+// Refresh access token 
 router.post('/refresh-token', authController.refreshToken);
 
-// Forgot password - Make sure this function exists in authController
+// Forgot password (OTP Generation)
 router.post('/forgot-password', authController.forgotPassword);
 
-// Reset password with token - Make sure this function exists in authController
+// Verify OTP and get reset token
+router.post('/verify-otp', authController.verifyOTP);
+
+// Reset password with token 
 router.post('/reset-password/:token', resetPasswordValidation, authController.resetPassword);
 
 module.exports = router;

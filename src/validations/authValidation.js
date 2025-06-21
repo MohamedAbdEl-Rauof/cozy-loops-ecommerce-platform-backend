@@ -73,8 +73,20 @@ const resetPasswordValidation = [
     })
 ];
 
+const otpVaildation = [
+  body('email')
+  .isEmail()
+  .withMessage('Please provide a valid email'),
+  body('otp')
+  .isLength({ min: 6, max: 6 })
+  .isNumeric()
+  .withMessage('OTP must be a 6-digit number'),
+];
+
+
 module.exports = {
   registerValidation,
   loginValidation,
-  resetPasswordValidation
+  resetPasswordValidation,
+  otpVaildation
 };

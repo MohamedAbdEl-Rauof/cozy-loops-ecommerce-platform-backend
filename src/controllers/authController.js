@@ -9,6 +9,9 @@ const {
   createVerificationEmailHtml
 } = require('../utils/emailUtils');
 
+const {generateOTP, hashOTP, verifyOTP,generateResetToken} = require('../utils/otpUtils');
+const {createOTPEmailHtml, createPasswordResetConfirmationHtml} = require('../utils/otpEmailTemplates');
+
 /**
  * Register a new user
  * @route POST /api/auth/register
@@ -217,6 +220,8 @@ exports.resendVerification = async (req, res) => {
 };
 
 
+// Update the login function:
+
 /**
  * Login user
  * @route POST /api/auth/login
@@ -254,9 +259,15 @@ exports.login = async (req, res) => {
         await admin.save();
       }
       
-      // Generate tokens for admin
-      const accessToken = generateAccessToken(admin._id);
-      const refreshToken = generateRefreshToken(admin._id);
+      // Generate tokens for admin - FIX: Pass payload object instead of just ID
+      const accessToken = generateAccessToken({
+        id: admin._id.toString(),
+        role: admin.role
+      });
+      
+      const refreshToken = generateRefreshToken({
+        id: admin._id.toString()
+      });
       
       // Save refresh token to admin user
       admin.refreshToken = refreshToken;
@@ -318,9 +329,15 @@ exports.login = async (req, res) => {
       });
     }
     
-    // Generate tokens
-    const accessToken = generateAccessToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    // Generate tokens - FIX: Pass payload object instead of just ID
+    const accessToken = generateAccessToken({
+      id: user._id.toString(),
+      role: user.role
+    });
+    
+    const refreshToken = generateRefreshToken({
+      id: user._id.toString()
+    });
     
     // Save refresh token to user
     user.refreshToken = refreshToken;
@@ -440,7 +457,7 @@ exports.refreshToken = async (req, res) => {
 };
 
 /**
- * Forgot password - send reset email
+ * Request password reset with OTP
  * @route POST /api/auth/forgot-password
  * @access Public
  */
@@ -459,56 +476,44 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ message: 'User not found with this email' });
     }
     
-    // Generate reset token
-    const resetToken = generateVerificationToken();
+    // Generate OTP
+    const otp = generateOTP();
     
-    // Set reset token and expiration
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+    // Hash OTP for secure storage
+    const hashedOTP = await hashOTP(otp);
+    
+    // Set OTP and expiration (10 minutes)
+    user.otp = {
+      code: hashedOTP,
+      expiresAt: Date.now() + 10 * 60 * 1000
+    };
     
     await user.save();
     
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    
     // Create email content
-    const emailHtml = `
-      <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
-        <h2 style="color: #333; text-align: center;">Reset Your Password</h2>
-        <p>Hello ${user.firstName},</p>
-        <p>You requested to reset your password. Please click the button below to set a new password:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Reset Password</a>
-        </div>
-        <p>If the button doesn't work, you can also click on the link below or copy and paste it into your browser:</p>
-        <p><a href="${resetUrl}">${resetUrl}</a></p>
-        <p>This reset link will expire in 1 hour.</p>
-        <p>If you did not request a password reset, please ignore this email and your password will remain unchanged.</p>
-        <p>Best regards,<br>The Cozy Loops Team</p>
-      </div>
-    `;
+    const emailHtml = createOTPEmailHtml(user.firstName, otp);
     
     try {
-      // Send reset email
+      // Send OTP email
       await sendEmail({
         to: email,
-        subject: 'Password Reset - Cozy Loops',
+        subject: 'Password Reset Code - Cozy Loops',
         html: emailHtml
       });
       
       res.status(200).json({ 
-        message: 'Password reset email sent successfully. Please check your email.' 
+        message: 'Password reset code sent successfully. Please check your email.',
+        email: email
       });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       
-      // Reset the token if email fails
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
+      // Reset the OTP if email fails
+      user.otp = undefined;
       await user.save();
       
       res.status(500).json({ 
-        message: 'Failed to send password reset email. Please try again later.' 
+        message: 'Failed to send password reset code. Please try again later.' 
       });
     }
   } catch (error) {
@@ -518,7 +523,63 @@ exports.forgotPassword = async (req, res) => {
 };
 
 /**
- * Reset password
+ * Verify OTP and issue reset token
+ * @route POST /api/auth/verify-otp
+ * @access Public
+ */
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP are required' });
+    }
+    
+    // Find user by email with OTP fields
+    const user = await User.findOne({ email }).select('+otp.code +otp.expiresAt');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if OTP exists and is not expired
+    if (!user.otp || !user.otp.code || !user.otp.expiresAt || user.otp.expiresAt < Date.now()) {
+      return res.status(400).json({ 
+        message: 'OTP is invalid or expired. Please request a new one.' 
+      });
+    }
+    
+    // Verify OTP
+    const isOTPValid = await verifyOTP(otp, user.otp.code);
+    
+    if (!isOTPValid) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+    
+    // Generate reset token
+    const resetToken = generateResetToken();
+    
+    // Set reset token and expiration (15 minutes)
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+    
+    // Clear OTP
+    user.otp = undefined;
+    
+    await user.save();
+    
+    res.status(200).json({
+      message: 'OTP verified successfully',
+      resetToken
+    });
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    res.status(500).json({ message: 'Server error during OTP verification' });
+  }
+};
+
+/**
+ * Reset password with token
  * @route POST /api/auth/reset-password/:token
  * @access Public
  */
@@ -550,7 +611,24 @@ exports.resetPassword = async (req, res) => {
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     
+    // Clear refresh token to invalidate all sessions (optional)
+    user.refreshToken = undefined;
+    
     await user.save();
+    
+    // Send confirmation email
+    try {
+      const confirmationHtml = createPasswordResetConfirmationHtml(user.firstName);
+      
+      await sendEmail({
+        to: user.email,
+        subject: 'Password Reset Successful - Cozy Loops',
+        html: confirmationHtml
+      });
+    } catch (emailError) {
+      console.error('Confirmation email error:', emailError);
+      // Continue even if confirmation email fails
+    }
     
     res.status(200).json({ 
       message: 'Password reset successful. You can now log in with your new password.' 
