@@ -27,6 +27,16 @@ exports.register = async (req, res) => {
 
     const { firstName, lastName, email, password } = req.body;
 
+    // Check for extra fields
+    const allowedFields = ['firstName', 'lastName', 'email', 'password'];
+    const extraFields = Object.keys(req.body).filter(field => !allowedFields.includes(field));
+    
+    if (extraFields.length > 0) {
+      return res.status(400).json({ 
+        message: `Unexpected fields: ${extraFields.join(', ')}` 
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -433,7 +443,7 @@ exports.refreshToken = async (req, res) => {
       // Set new access token cookie
       res.cookie('accessToken', accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV,
         sameSite: 'strict',
         maxAge: 15 * 60 * 1000 
       });
