@@ -359,13 +359,10 @@ exports.login = async (req, res) => {
       message: 'Login successful',
       user: {
         id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
         role: user.role
       },
-      accessToken,
-      refreshToken
+
     });
 
   } catch (error) {
@@ -509,8 +506,7 @@ exports.forgotPassword = async (req, res) => {
       });
 
       res.status(200).json({
-        message: 'Password reset code sent successfully. Please check your email.',
-        email: email
+        message: 'Password reset code sent successfully. Please check your email.'
       });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
