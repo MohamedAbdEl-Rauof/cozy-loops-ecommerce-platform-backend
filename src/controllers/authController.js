@@ -230,149 +230,150 @@ exports.resendVerification = async (req, res) => {
   }
 };
 
-/**
- * Login user
- * @route POST /api/auth/login
- * @access Public
- */
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  /**
+   * Login user
+   * @route POST /api/auth/login
+   * @access Public
+   */
+  exports.login = async (req, res) => {
+    try {
+      const { email, password } = req.body;
 
-    // Check for admin login using environment variables
-    if (
-      process.env.ADMIN_EMAIL &&
-      process.env.ADMIN_PASSWORD &&
-      email === process.env.ADMIN_EMAIL &&
-      password === process.env.ADMIN_PASSWORD
-    ) {
-      // Find or create admin user
-      let admin = await User.findOne({ email: process.env.ADMIN_EMAIL });
+      // Check for admin login using environment variables
+      if (
+        process.env.ADMIN_EMAIL &&
+        process.env.ADMIN_PASSWORD &&
+        email === process.env.ADMIN_EMAIL &&
+        password === process.env.ADMIN_PASSWORD
+      ) {
+        // Find or create admin user
+        let admin = await User.findOne({ email: process.env.ADMIN_EMAIL });
 
-      if (!admin) {
-        // Create admin user if it doesn't exist
-        admin = await User.create({
-          firstName: 'Admin',
-          lastName: 'User',
-          email: process.env.ADMIN_EMAIL,
-          password: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12),
-          role: 'admin',
-          emailVerified: true
+        if (!admin) {
+          // Create admin user if it doesn't exist
+          admin = await User.create({
+            firstName: 'Admin',
+            lastName: 'User',
+            email: process.env.ADMIN_EMAIL,
+            password: await bcrypt.hash(process.env.ADMIN_PASSWORD, 12),
+            role: 'admin',
+            emailVerified: true
+          });
+        } else if (admin.role !== 'admin') {
+          // Ensure user has admin role
+          admin.role = 'admin';
+          admin.emailVerified = true;
+          await admin.save();
+        }
+
+        // Generate tokens for admin 
+        const accessToken = generateAccessToken({
+          id: admin._id.toString(),
+          role: admin.role
         });
-      } else if (admin.role !== 'admin') {
-        // Ensure user has admin role
-        admin.role = 'admin';
-        admin.emailVerified = true;
+
+        const refreshToken = generateRefreshToken({
+          id: admin._id.toString()
+        });
+
+        // Save refresh token to admin user
+        admin.refreshToken = refreshToken;
         await admin.save();
+
+        // Set cookies
+        setTokenCookies(res, accessToken, refreshToken);
+
+        return res.status(200).json({
+          success: true,
+          message: 'Admin login successful',
+          user: {
+            id: admin._id,
+            firstName: admin.firstName,
+            lastName: admin.lastName,
+            email: admin.email,
+            role: admin.role
+          },
+          accessToken,
+          refreshToken
+        });
       }
 
-      // Generate tokens for admin 
+      // Regular user login
+      const user = await User.findOne({ email }).select('+password');
+
+      // Check if user exists
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Check if password is correct
+      const isPasswordCorrect = await bcrypt.compare(password, user.password);
+      if (!isPasswordCorrect) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Check if email is verified
+      if (!user.emailVerified) {
+        return res.status(403).json({
+          success: false,
+          message: 'Email not verified. Please verify your email before logging in.',
+          emailVerified: false,
+          userId: user._id
+        });
+      }
+
+      // Check if user is active
+      if (!user.active) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated. Please contact support.'
+        });
+      }
+
+      // Generate tokens 
       const accessToken = generateAccessToken({
-        id: admin._id.toString(),
-        role: admin.role
+        id: user._id.toString(),
+        role: user.role
       });
 
       const refreshToken = generateRefreshToken({
-        id: admin._id.toString()
+        id: user._id.toString()
       });
 
-      // Save refresh token to admin user
-      admin.refreshToken = refreshToken;
-      await admin.save();
+      // Save refresh token to user
+      user.refreshToken = refreshToken;
+      await user.save();
 
       // Set cookies
       setTokenCookies(res, accessToken, refreshToken);
 
+      // Return success response
       return res.status(200).json({
         success: true,
-        message: 'Admin login successful',
+        message: 'Login successful',
         user: {
-          id: admin._id,
-          firstName: admin.firstName,
-          lastName: admin.lastName,
-          email: admin.email,
-          role: admin.role
+          id: user._id,
+          email: user.email,
+          role: user.role
         },
         accessToken,
         refreshToken
       });
-    }
 
-    // Regular user login
-    const user = await User.findOne({ email }).select('+password');
-
-    // Check if user exists
-    if (!user) {
-      return res.status(401).json({
+    } catch (error) {
+      console.error('Login error:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Server error during login'
       });
     }
-
-    // Check if password is correct
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
-    if (!isPasswordCorrect) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    // Check if email is verified
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        success: false,
-        message: 'Email not verified. Please verify your email before logging in.',
-        emailVerified: false,
-        userId: user._id
-      });
-    }
-
-    // Check if user is active
-    if (!user.active) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account has been deactivated. Please contact support.'
-      });
-    }
-
-    // Generate tokens 
-    const accessToken = generateAccessToken({
-      id: user._id.toString(),
-      role: user.role
-    });
-
-    const refreshToken = generateRefreshToken({
-      id: user._id.toString()
-    });
-
-    // Save refresh token to user
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    // Set cookies
-    setTokenCookies(res, accessToken, refreshToken);
-
-    // Return success response
-    return res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      user: {
-        id: user._id,
-        email: user.email,
-        role: user.role
-      },
-
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error during login'
-    });
-  }
-};
+  };
 
 /**
  * Logout user
@@ -599,11 +600,18 @@ exports.resetPassword = async (req, res) => {
     const user = await User.findOne({
       resetPasswordToken: token,
       resetPasswordExpire: { $gt: Date.now() }
-    });
+    }).select('+password');
 
     if (!user) {
       return res.status(400).json({
         message: 'Invalid or expired reset token'
+      });
+    }
+
+    const isSamePassword = await bcrypt.compare(password, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        message: 'New password cannot be the same as your current password'
       });
     }
 
@@ -630,7 +638,6 @@ exports.resetPassword = async (req, res) => {
       });
     } catch (emailError) {
       console.error('Confirmation email error:', emailError);
-      // Continue even if confirmation email fails
     }
 
     res.status(200).json({
