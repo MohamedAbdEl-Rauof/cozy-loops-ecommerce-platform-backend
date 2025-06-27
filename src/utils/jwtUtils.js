@@ -51,7 +51,7 @@ const verifyToken = (token, secret) => {
   // set access Token
   res.cookie('accessToken', accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV,
     maxAge: 15 * 60 * 1000 ,
     sameSite: 'Strict' 
   });
@@ -59,7 +59,7 @@ const verifyToken = (token, secret) => {
   // set refresh Token
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV,
     maxAge: 7 * 24 * 60 * 60 * 1000, 
     sameSite: 'Strict' ,
     path : '/api/auth/refresh-token'
