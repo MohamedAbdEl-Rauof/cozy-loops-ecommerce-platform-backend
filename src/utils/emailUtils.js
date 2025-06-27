@@ -46,7 +46,7 @@ const generateVerificationToken = () => {
  * Create verification URL
  */
 const createVerificationUrl = (token) => {
-  return `${process.env.USER_FRONTEND_URL}/verify-email/${token}`;
+  return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
 };
 
 /**
