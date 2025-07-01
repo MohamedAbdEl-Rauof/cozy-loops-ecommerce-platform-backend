@@ -25,7 +25,8 @@ exports.getUser = async (req, res) => {
         addresses: user.addresses,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
+        avatar: user.Avatar,
       }
     });
   } catch (error) {
