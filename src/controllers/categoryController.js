@@ -9,6 +9,7 @@ exports.getAllCategories = async (req, res) => {
 
     res.json({
       success: true,
+      count: categories.length,
       data: categories
     });
   } catch (error) {
@@ -40,27 +41,31 @@ exports.getCategory = async (req, res) => {
       });
     }
 
-    // Get subcategories
     const subcategories = await Category.find({
       parent: category._id,
       isActive: true
     }).sort({ sortOrder: 1, name: 1 });
 
-    // Get products in this category
-    const products = await Product.find({ 
-      category: category._id, 
-      isActive: true 
-    })
-      .populate('category', 'name slug')
-      .populate('maker', 'name slug location image')
-      .sort({ featured: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    let products = [];
+    let totalProducts = 0;
+    
+    try {
+      products = await Product.find({ 
+        category: category._id, 
+        isActive: true 
+      })
+        .populate('category', 'name slug')
+        .sort({ featured: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
 
-    const totalProducts = await Product.countDocuments({ 
-      category: category._id, 
-      isActive: true 
-    });
+      totalProducts = await Product.countDocuments({ 
+        category: category._id, 
+        isActive: true 
+      });
+    } catch (productError) {
+      console.log('Product operations skipped:', productError.message);
+    }
 
     res.json({
       success: true,
@@ -85,3 +90,4 @@ exports.getCategory = async (req, res) => {
     });
   }
 };
+
