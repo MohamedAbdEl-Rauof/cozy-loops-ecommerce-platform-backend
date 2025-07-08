@@ -1,4 +1,5 @@
 const { Category, Product } = require('../models');
+const mongoose = require('mongoose');
 
 // Get all categories
 exports.getAllCategories = async (req, res) => {
@@ -29,10 +30,22 @@ exports.getCategory = async (req, res) => {
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
-    const category = await Category.findOne({
-      $or: [{ _id: id }, { slug: id }],
-      isActive: true
-    }).populate('parent', 'name slug');
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(id);
+    
+    let query;
+    if (isValidObjectId) {
+      query = {
+        $or: [{ _id: id }, { slug: id }],
+        isActive: true
+      };
+    } else {
+      query = {
+        slug: id,
+        isActive: true
+      };
+    }
+
+    const category = await Category.findOne(query).populate('parent', 'name slug');
 
     if (!category) {
       return res.status(404).json({
@@ -64,7 +77,7 @@ exports.getCategory = async (req, res) => {
         isActive: true 
       });
     } catch (productError) {
-      console.log('Product operations skipped:', productError.message);
+        console.log('Product operations skipped:', productError.message);
     }
 
     res.json({
@@ -83,6 +96,7 @@ exports.getCategory = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error in getCategory:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching category',
@@ -90,4 +104,3 @@ exports.getCategory = async (req, res) => {
     });
   }
 };
-

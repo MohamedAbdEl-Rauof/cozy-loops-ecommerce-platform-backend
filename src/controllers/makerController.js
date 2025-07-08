@@ -38,10 +38,20 @@ exports.getAllMakers = async (req, res) => {
 exports.getMaker = async (req, res) => {
   try {
     const { id } = req.params;
-    const maker = await Maker.findOne({
-      $or: [{ _id: id }, { slug: id }],
-      isActive: true
-    });
+    let maker;
+
+    const mongoose = require('mongoose');
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      maker = await Maker.findOne({
+        $or: [{ _id: id }, { slug: id }],
+        isActive: true
+      });
+    } else {
+      maker = await Maker.findOne({
+        slug: id,
+        isActive: true
+      });
+    }
 
     if (!maker) {
       return res.status(404).json({

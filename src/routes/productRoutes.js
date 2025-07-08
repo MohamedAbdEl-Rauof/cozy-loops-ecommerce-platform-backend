@@ -2,12 +2,12 @@ const express = require('express');
 const router = express.Router();
 const {
   getAllProducts,
-  getProduct,
+  getProductsByCategory,
 } = require('../controllers/productController');
 
 // Public routes
 router.get('/', getAllProducts);
-router.get('/:id', getProduct);
+router.get('/category/:id', getProductsByCategory);
 
 
 
