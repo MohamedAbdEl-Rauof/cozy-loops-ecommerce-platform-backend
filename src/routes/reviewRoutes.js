@@ -5,19 +5,20 @@ const {
     updateReview,
     deleteReview,
     likeDislikeReview,
-    getUserReviews
+    getAllUsersReviews
 } = require('../controllers/reviewController');
 const { protect } = require('../middleware/authMiddleware');
 const { validateReview, validateLikeDislike, validateUpdateReview } = require('../validations/reviewValidation');
 
 const router = express.Router();
 
+router.get('/user', getAllUsersReviews);
+
 // Apply protection to ALL routes
 router.use(protect);
 
 // Specific routes MUST come before parameterized routes
-router.get('/user', getUserReviews);
-router.get('/product/:productId', getProductReviews);
+router.get('/product/:productIdentifier', protect, getProductReviews);
 
 router.route('/')
     .post(validateReview, createReview);

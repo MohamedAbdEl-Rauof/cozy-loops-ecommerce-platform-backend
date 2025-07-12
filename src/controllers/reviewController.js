@@ -48,34 +48,36 @@ const createReview = asyncHandler(async (req, res) => {
     });
 });
 
+
 // @desc    Get all reviews for a product
-// @route   GET /api/reviews/product/:productId
+// @route   GET /api/reviews/product/:productIdentifier
 // @access  Private (Now Protected)
 const getProductReviews = asyncHandler(async (req, res) => {
-    const { productId } = req.params;
+    const { productIdentifier } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || '-createdAt';
 
-    // Validate productId format
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-        res.status(400);
-        throw new Error('Invalid product ID format');
+    let product;
+
+    if (mongoose.Types.ObjectId.isValid(productIdentifier)) {
+        product = await Product.findById(productIdentifier);
+    } else {
+        product = await Product.findOne({ slug: productIdentifier });
     }
 
-    const product = await Product.findById(productId);
     if (!product) {
         res.status(404);
         throw new Error('Product not found');
     }
 
-    const reviews = await Review.find({ product: productId })
+    const reviews = await Review.find({ product: product._id })
         .populate('user', 'firstName lastName Avatar')
         .sort(sort)
         .limit(limit * 1)
         .skip((page - 1) * limit);
 
-    const total = await Review.countDocuments({ product: productId });
+    const total = await Review.countDocuments({ product: product._id });
 
     if (total === 0) {
         return res.json({
@@ -239,22 +241,53 @@ const likeDislikeReview = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Get user's own reviews
-// @route   GET /api/reviews/user
-// @access  Private
-const getUserReviews = asyncHandler(async (req, res) => {
-    const userId = req.user._id;
+
+// @desc    Get all users' reviews
+// @route   GET /api/reviews/users
+// @access  Public
+const getAllUsersReviews = asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
+    const sort = req.query.sort || '-createdAt';
 
-    const reviews = await Review.find({ user: userId })
-        .populate('product', 'name mainImage slug')
+    // Optional filters
+    const { userId, productId, rating } = req.query;
+    
+    let filter = {};
+    
+    // Add filters if provided
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+        filter.user = userId;
+    }
+    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+        filter.product = productId;
+    }
+    if (rating) {
+        filter.rating = Number(rating);
+    }
+
+    const reviews = await Review.find(filter)
         .populate('user', 'firstName lastName Avatar')
-        .sort('-createdAt')
+        .populate('product', 'name mainImage slug price')
+        .sort(sort)
         .limit(limit * 1)
         .skip((page - 1) * limit);
 
-    const total = await Review.countDocuments({ user: userId });
+    const total = await Review.countDocuments(filter);
+
+    if (total === 0) {
+        return res.json({
+            success: true,
+            message: 'No reviews found',
+            data: [],
+            pagination: {
+                page,
+                limit,
+                total: 0,
+                pages: 0
+            }
+        });
+    }
 
     res.json({
         success: true,
@@ -268,11 +301,12 @@ const getUserReviews = asyncHandler(async (req, res) => {
     });
 });
 
+
 module.exports = {
     createReview,
     getProductReviews,
     updateReview,
     deleteReview,
     likeDislikeReview,
-    getUserReviews
+    getAllUsersReviews
 };
