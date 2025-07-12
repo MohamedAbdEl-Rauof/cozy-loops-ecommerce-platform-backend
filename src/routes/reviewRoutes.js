@@ -8,7 +8,7 @@ const {
     getAllUsersReviews
 } = require('../controllers/reviewController');
 const { protect } = require('../middleware/authMiddleware');
-const { validateReview, validateLikeDislike, validateUpdateReview } = require('../validations/reviewValidation');
+const { validateLikeDislike, validateUpdateReview } = require('../validations/reviewValidation');
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.use(protect);
 router.get('/product/:productIdentifier', protect, getProductReviews);
 
 router.route('/')
-    .post(validateReview, createReview);
+    .post(createReview);
 
 // Parameterized routes come last
 router.route('/:id')

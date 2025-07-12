@@ -8,18 +8,28 @@ const asyncHandler = require('express-async-handler');
 // @route   POST /api/reviews
 // @access  Private
 const createReview = asyncHandler(async (req, res) => {
-    const { productId, comment, rating } = req.body;
+    const { productSlug, comment, rating } = req.body;
     const userId = req.user._id;
 
-    const product = await Product.findById(productId);
+    if (!productSlug || !comment || !rating) {
+        res.status(400);
+        throw new Error('Product slug, comment, and rating are required');
+    }
+
+    if (rating < 1 || rating > 5) {
+        res.status(400);
+        throw new Error('Rating must be between 1 and 5');
+    }
+
+    const product = await Product.findOne({ slug: productSlug });
     if (!product) {
         res.status(404);
         throw new Error('Product not found');
     }
 
-    const existingReview = await Review.findOne({ user: userId, product: productId });
+    const existingReview = await Review.findOne({ user: userId, product: product._id });
     if (existingReview) {
-        res.status(400);
+        res.status(409);
         throw new Error('You have already reviewed this product. You can update your existing review instead.');
     }
 
@@ -29,25 +39,13 @@ const createReview = asyncHandler(async (req, res) => {
         throw new Error('User not found');
     }
 
-    const reviewData = {
-        user: userId,
-        product: productId,
-        comment,
-        rating: Number(rating)
-    };
-
-    const review = await Review.create(reviewData);
-
     await product.updateReviewStats();
-
-    await review.populate('user', 'firstName lastName Avatar');
 
     res.status(201).json({
         success: true,
-        data: review
+        message: 'Review created successfully',
     });
 });
-
 
 // @desc    Get all reviews for a product
 // @route   GET /api/reviews/product/:productIdentifier
@@ -252,9 +250,9 @@ const getAllUsersReviews = asyncHandler(async (req, res) => {
 
     // Optional filters
     const { userId, productId, rating } = req.query;
-    
+
     let filter = {};
-    
+
     // Add filters if provided
     if (userId && mongoose.Types.ObjectId.isValid(userId)) {
         filter.user = userId;
