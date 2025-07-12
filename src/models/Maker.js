@@ -32,7 +32,7 @@ const makerSchema = new mongoose.Schema({
     type: String,
     trim: true,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !v || /^https?:\/\/.+/.test(v);
       },
       message: 'Website must be a valid URL'
@@ -51,13 +51,17 @@ const makerSchema = new mongoose.Schema({
   totalProducts: {
     type: Number,
     default: 0
+  },
+  message: {
+    type: String,
+    trim: true
   }
 }, {
   timestamps: true
 });
 
 // Create slug before saving
-makerSchema.pre('save', function(next) {
+makerSchema.pre('save', function (next) {
   if (this.isModified('name')) {
     this.slug = this.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-');
   }

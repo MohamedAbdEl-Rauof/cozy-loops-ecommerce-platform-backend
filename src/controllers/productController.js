@@ -6,28 +6,28 @@ exports.getAllProducts = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
-    
+
     // Build filter object
     const filter = { isActive: true };
-    
+
     if (req.query.category) {
       filter.category = req.query.category;
     }
-    
+
     if (req.query.maker) {
       filter.maker = req.query.maker;
     }
-    
+
     if (req.query.featured) {
       filter.featured = req.query.featured === 'true';
     }
-    
+
     if (req.query.minPrice || req.query.maxPrice) {
       filter.price = {};
       if (req.query.minPrice) filter.price.$gte = parseFloat(req.query.minPrice);
       if (req.query.maxPrice) filter.price.$lte = parseFloat(req.query.maxPrice);
     }
-    
+
     if (req.query.search) {
       filter.$or = [
         { name: { $regex: req.query.search, $options: 'i' } },
@@ -60,7 +60,7 @@ exports.getAllProducts = async (req, res) => {
 
     const products = await Product.find(filter)
       .populate('category', 'name slug')
-      .populate('maker', 'name slug location image')
+      .populate('maker', 'name slug location image message')
       .sort(sort)
       .skip(skip)
       .limit(limit);
@@ -98,7 +98,7 @@ exports.getProductsByCategory = async (req, res) => {
     // Find category by ID or slug
     const mongoose = require('mongoose');
     let category;
-    
+
     if (mongoose.Types.ObjectId.isValid(id)) {
       category = await Category.findOne({
         $or: [{ _id: id }, { slug: id }],
@@ -118,25 +118,25 @@ exports.getProductsByCategory = async (req, res) => {
       });
     }
 
-    const filter = { 
-      category: category._id, 
-      isActive: true 
+    const filter = {
+      category: category._id,
+      isActive: true
     };
 
     if (req.query.maker) {
       filter.maker = req.query.maker;
     }
-    
+
     if (req.query.featured) {
       filter.featured = req.query.featured === 'true';
     }
-    
+
     if (req.query.minPrice || req.query.maxPrice) {
       filter.price = {};
       if (req.query.minPrice) filter.price.$gte = parseFloat(req.query.minPrice);
       if (req.query.maxPrice) filter.price.$lte = parseFloat(req.query.maxPrice);
     }
-    
+
     if (req.query.search) {
       filter.$or = [
         { name: { $regex: req.query.search, $options: 'i' } },
@@ -167,13 +167,13 @@ exports.getProductsByCategory = async (req, res) => {
         sort = { featured: -1, createdAt: -1 };
     }
 
-    // Get products in this category
     const products = await Product.find(filter)
       .populate('category', 'name slug description')
-      .populate('maker', 'name slug location image')
+      .populate('maker', 'name slug location image message')
       .sort(sort)
       .skip(skip)
       .limit(limit);
+
 
     const total = await Product.countDocuments(filter);
 

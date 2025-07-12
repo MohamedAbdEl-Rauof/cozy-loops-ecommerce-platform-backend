@@ -93,7 +93,11 @@ const productSchema = new mongoose.Schema({
   numReviews: {
     type: Number,
     default: 0
-  }
+  },
+  reviews: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Review'
+  }]
 }, {
   timestamps: true
 });
@@ -111,5 +115,17 @@ productSchema.pre('save', function(next) {
   
   next();
 });
+
+productSchema.methods.updateReviewStats = async function() {
+  const Review = mongoose.model('Review');
+  const reviews = await Review.find({ product: this._id });
+  
+  this.numReviews = reviews.length;
+  this.averageRating = reviews.length > 0 
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length 
+    : 0;
+  
+  await this.save();
+};
 
 module.exports = mongoose.model('Product', productSchema);
