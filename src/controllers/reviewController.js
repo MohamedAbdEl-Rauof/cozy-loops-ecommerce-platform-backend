@@ -64,13 +64,14 @@ const createReview = asyncHandler(async (req, res) => {
 
 // @desc    Get all reviews for a product
 // @route   GET /api/reviews/product/:productIdentifier
-// @access  Private (Now Protected)
+// @access  Public
 const getProductReviews = asyncHandler(async (req, res) => {
     const { productIdentifier } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || '-createdAt';
-    const userId = req.user?._id; 
+    
+    const { userId } = req.query;
 
     let product;
 
@@ -109,7 +110,9 @@ const getProductReviews = asyncHandler(async (req, res) => {
 
     const reviewsWithOwnership = reviews.map(review => ({
         ...review.toObject(),
-        isOwner: userId ? review.user._id.toString() === userId.toString() : false
+        isOwner: userId && mongoose.Types.ObjectId.isValid(userId) 
+            ? review.user._id.toString() === userId.toString() 
+            : false
     }));
 
     res.json({

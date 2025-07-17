@@ -13,12 +13,10 @@ const { validateLikeDislike, validateUpdateReview } = require('../validations/re
 const router = express.Router();
 
 router.get('/user', getAllUsersReviews);
+router.get('/product/:productIdentifier', getProductReviews);
 
 // Apply protection to ALL routes
 router.use(protect);
-
-// Specific routes MUST come before parameterized routes
-router.get('/product/:productIdentifier', protect, getProductReviews);
 
 router.route('/')
     .post(createReview);
