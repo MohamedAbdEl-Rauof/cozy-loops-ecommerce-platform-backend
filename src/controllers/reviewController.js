@@ -39,11 +39,26 @@ const createReview = asyncHandler(async (req, res) => {
         throw new Error('User not found');
     }
 
+    // Create and save the new review
+    const review = new Review({
+        user: userId,
+        product: product._id,
+        comment: comment.trim(),
+        rating: Number(rating)
+    });
+
+    const savedReview = await review.save();
+
+    // Update product review stats after creating the review
     await product.updateReviewStats();
+
+    // Populate user data for the response
+    await savedReview.populate('user', 'firstName lastName Avatar');
 
     res.status(201).json({
         success: true,
         message: 'Review created successfully',
+        data: savedReview
     });
 });
 
@@ -55,6 +70,7 @@ const getProductReviews = asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || '-createdAt';
+    const userId = req.user?._id; 
 
     let product;
 
@@ -91,9 +107,14 @@ const getProductReviews = asyncHandler(async (req, res) => {
         });
     }
 
+    const reviewsWithOwnership = reviews.map(review => ({
+        ...review.toObject(),
+        isOwner: userId ? review.user._id.toString() === userId.toString() : false
+    }));
+
     res.json({
         success: true,
-        data: reviews,
+        data: reviewsWithOwnership,
         pagination: {
             page,
             limit,

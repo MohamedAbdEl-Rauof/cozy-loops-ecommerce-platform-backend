@@ -15,7 +15,6 @@ const reviewSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Review comment is required'],
     trim: true,
-    minlength: [10, 'Comment must be at least 10 characters'],
     maxlength: [1000, 'Comment cannot exceed 1000 characters']
   },
   rating: {
