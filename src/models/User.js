@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Address schema (embedded in User)
+// ``Addres``s schema (embedded in User)
 const addressSchema = new mongoose.Schema({
   street: {
     type: String,
