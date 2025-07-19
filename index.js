@@ -34,6 +34,7 @@ const categoryRoutes = require('./src/routes/categoryRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const makerRoutes = require('./src/routes/makerRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
+const addressRoutes = require('./src/routes/addressRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -41,6 +42,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/makers', makerRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/addresses', addressRoutes);
 
 app.get('/', (req, res) => {
   res.json({
