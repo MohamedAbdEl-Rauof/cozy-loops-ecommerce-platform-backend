@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
-// Import controllers later
+const {
+  getAllCategories,
+  getCategory,
+} = require('../controllers/categoryController');
 
-// Routes will be implemented later
-router.route('/').get((req, res) => {
-  res.status(200).json({ message: 'Get all categories' });
-});
+// Public routes
+router.get('/', getAllCategories);
+router.get('/:id', getCategory);
+
 
 module.exports = router;

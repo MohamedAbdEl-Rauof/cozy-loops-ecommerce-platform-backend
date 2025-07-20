@@ -1,80 +1,65 @@
 const mongoose = require('mongoose');
 
 const reviewSchema = new mongoose.Schema({
-  product: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true
-  },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: [true, 'User is required']
+  },
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: [true, 'Product is required']
+  },
+  comment: {
+    type: String,
+    required: [true, 'Review comment is required'],
+    trim: true,
+    maxlength: [1000, 'Comment cannot exceed 1000 characters']
   },
   rating: {
     type: Number,
     required: [true, 'Rating is required'],
-    min: 1,
-    max: 5
+    min: [1, 'Rating must be at least 1'],
+    max: [5, 'Rating cannot exceed 5']
   },
-  title: String,
-  comment: String,
-  isApproved: {
-    type: Boolean,
-    default: false
+  likes: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    type: {
+      type: String,
+      enum: ['like', 'dislike'],
+      required: true
+    }
+  }],
+  likesCount: {
+    type: Number,
+    default: 0
+  },
+  dislikesCount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
 });
 
-// Prevent duplicate reviews (one review per user per product)
-reviewSchema.index({ product: 1, user: 1 }, { unique: true });
+reviewSchema.index({ user: 1, product: 1 }, { unique: true });
 
-// Create additional indexes for better performance
-reviewSchema.index({ product: 1, rating: -1 });
-reviewSchema.index({ user: 1 });
-reviewSchema.index({ isApproved: 1 });
-
-// Static method to calculate average rating for a product
-reviewSchema.statics.calcAverageRating = async function(productId) {
-  const stats = await this.aggregate([
-    {
-      $match: { product: productId, isApproved: true }
-    },
-    {
-      $group: {
-        _id: '$product',
-        avgRating: { $avg: '$rating' },
-        numReviews: { $sum: 1 }
-      }
-    }
-  ]);
-
-  if (stats.length > 0) {
-    await mongoose.model('Product').findByIdAndUpdate(productId, {
-      averageRating: stats[0].avgRating.toFixed(1),
-      numReviews: stats[0].numReviews
-    });
-  } else {
-    await mongoose.model('Product').findByIdAndUpdate(productId, {
-      averageRating: 0,
-      numReviews: 0
-    });
-  }
-};
-
-// Call calcAverageRating after save
-reviewSchema.post('save', function() {
-  this.constructor.calcAverageRating(this.product);
+reviewSchema.pre('save', function(next) {
+  this.likesCount = this.likes.filter(like => like.type === 'like').length;
+  this.dislikesCount = this.likes.filter(like => like.type === 'dislike').length;
+  next();
 });
 
-// Call calcAverageRating after update
-reviewSchema.post(/^findOneAnd/, async function(doc) {
-  if (doc) {
-    await doc.constructor.calcAverageRating(doc.product);
+reviewSchema.set('toJSON', {
+  transform: function(doc, ret) {
+    delete ret.name;
+    delete ret.image;
+    return ret;
   }
 });
 
-const Review = mongoose.model('Review', reviewSchema);
-
-module.exports = Review;
+module.exports = mongoose.model('Review', reviewSchema);
