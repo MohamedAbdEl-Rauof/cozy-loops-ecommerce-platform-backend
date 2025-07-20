@@ -2,8 +2,12 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// Address schema (embedded in User)
 const addressSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['shipping', 'billing'],
+    default: 'shipping'
+  },
   street: {
     type: String,
     required: [true, 'Street address is required']

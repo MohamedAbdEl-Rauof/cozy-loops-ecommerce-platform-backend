@@ -3,63 +3,61 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
 const connectDB = require('./src/config/database');
-const authRoutes = require('./src/routes/authRoutes');
-const cookieParser = require('cookie-parser'); 
 
-// Load environment variables
 dotenv.config();
 
-// Connect to database
 connectDB();
 
-// Initialize express app
 const app = express();
 
-// Security middleware
 app.use(helmet());
 
-// Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Cookie parser middleware 
 app.use(cookieParser());
 
-// CORS middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true
 }));
 
-// Logging middleware
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Import routes
+const authRoutes = require('./src/routes/authRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
 const productRoutes = require('./src/routes/productRoutes');
-const orderRoutes = require('./src/routes/orderRoutes');
+const makerRoutes = require('./src/routes/makerRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
-const cartRoutes = require('./src/routes/cartRoutes');
+const addressRoutes = require('./src/routes/addressRoutes');
 
-// Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
-app.use('/api/orders', orderRoutes);
+app.use('/api/makers', makerRoutes);
 app.use('/api/reviews', reviewRoutes);
-app.use('/api/cart', cartRoutes);
+app.use('/api/addresses', addressRoutes);
 
-// Base route
 app.get('/', (req, res) => {
-  res.send('Welcome to Cozy Loops E-commerce API');
+  res.json({
+    message: 'Cozy Loops E-commerce API',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      users: '/api/users',
+      categories: '/api/categories',
+      products: '/api/products',
+      makers: '/api/makers'
+    }
+  });
 });
 
-// Error handling middleware
 app.use((req, res, next) => {
   const error = new Error(`Not Found - ${req.originalUrl}`);
   res.status(404);
@@ -70,25 +68,23 @@ app.use((err, req, res, next) => {
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(statusCode);
   res.json({
+    success: false,
     message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? '🥞🥞🥞🥞🥞' : err.stack,
+    stack: process.env.NODE_ENV === 'production' ? null : err.stack
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
   console.error('UNHANDLED REJECTION! 💥 Shutting down...');
   console.error(err.name, err.message);
   process.exit(1);
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
   console.error(err.name, err.message);
