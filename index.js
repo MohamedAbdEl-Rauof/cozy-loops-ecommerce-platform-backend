@@ -1,10 +1,12 @@
 const express = require('express');
+const http = require('http');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./src/config/database');
+const { initializeSocket } = require('./src/config/socket');
 
 dotenv.config();
 
@@ -12,11 +14,13 @@ connectDB();
 
 const app = express();
 
-app.use(helmet());
+const server = http.createServer(app);
 
+const io = initializeSocket(server);
+
+app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(cookieParser());
 
 app.use(cors({
@@ -35,6 +39,7 @@ const productRoutes = require('./src/routes/productRoutes');
 const makerRoutes = require('./src/routes/makerRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
 const addressRoutes = require('./src/routes/addressRoutes');
+const cartRoutes = require('./src/routes/cartRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -43,6 +48,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/makers', makerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/cart', cartRoutes);
 
 app.get('/', (req, res) => {
   res.json({
@@ -66,8 +72,7 @@ app.use((req, res, next) => {
 
 app.use((err, req, res, next) => {
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  res.status(statusCode);
-  res.json({
+  res.status(statusCode).json({
     success: false,
     message: err.message,
     stack: process.env.NODE_ENV === 'production' ? null : err.stack
@@ -75,7 +80,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
