@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./src/config/database');
-const { initializeSocket } = require('./src/config/socket');
+const { initSocket } = require('./src/sockets/cartSocket');
 
 dotenv.config();
 
@@ -16,7 +16,7 @@ const app = express();
 
 const server = http.createServer(app);
 
-const io = initializeSocket(server);
+initSocket(server);
 
 app.use(helmet());
 app.use(express.json());
