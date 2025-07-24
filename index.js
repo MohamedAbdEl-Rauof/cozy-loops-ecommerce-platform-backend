@@ -40,6 +40,7 @@ const makerRoutes = require('./src/routes/makerRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
 const addressRoutes = require('./src/routes/addressRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
+const wishlistRoutes = require('./src/routes/wishlistRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -49,6 +50,7 @@ app.use('/api/makers', makerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 
 app.get('/', (req, res) => {
   res.json({
