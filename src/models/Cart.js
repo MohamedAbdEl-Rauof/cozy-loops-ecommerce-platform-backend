@@ -66,10 +66,7 @@ cartSchema.methods.addItem = async function(productId, quantity, price, variant 
     if (!product) {
         throw new Error('Product not found');
     }
-    
-    if (product.stock < quantity) {
-        throw new Error('Insufficient stock');
-    }
+ 
 
     const existingItemIndex = this.items.findIndex(item =>
         item.product.toString() === productId.toString() &&
@@ -79,9 +76,7 @@ cartSchema.methods.addItem = async function(productId, quantity, price, variant 
     if (existingItemIndex > -1) {
         const newQuantity = this.items[existingItemIndex].quantity + quantity;
         
-        if (product.stock < newQuantity) {
-            throw new Error('Insufficient stock for requested quantity');
-        }
+      
         
         this.items[existingItemIndex].quantity = newQuantity;
         this.items[existingItemIndex].totalPrice = newQuantity * price;
@@ -114,9 +109,6 @@ cartSchema.methods.updateItemQuantity = async function(productId, quantity, vari
             throw new Error('Product not found');
         }
         
-        if (product.stock < quantity) {
-            throw new Error('Insufficient stock');
-        }
     }
 
     const itemIndex = this.items.findIndex(item =>

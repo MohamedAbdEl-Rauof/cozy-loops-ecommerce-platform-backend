@@ -18,6 +18,11 @@ const server = http.createServer(app);
 
 initSocket(server);
 
+const webhookRoutes = require('./src/routes/webhookPayment');
+
+app.use('/webhook', webhookRoutes);
+
+
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -41,6 +46,7 @@ const reviewRoutes = require('./src/routes/reviewRoutes');
 const addressRoutes = require('./src/routes/addressRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
 const wishlistRoutes = require('./src/routes/wishlistRoutes');
+const paymentRoutes = require('./src/routes/stripePayment');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -51,7 +57,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
-
+app.use('/api/payment', paymentRoutes);
 app.get('/', (req, res) => {
   res.json({
     message: 'Cozy Loops E-commerce API',

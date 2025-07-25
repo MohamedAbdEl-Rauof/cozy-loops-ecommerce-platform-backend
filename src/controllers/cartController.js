@@ -96,6 +96,7 @@ exports.getCart = async (req, res) => {
     res.status(200).json({
       success: true,
       cart: {
+        _id: cart._id,
         items: cart.items,
         totalItems: cart.totalItems,
         totalAmount: cart.totalAmount,
