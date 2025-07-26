@@ -59,15 +59,27 @@ cartSchema.pre('save', function(next) {
     next();
 });
 
-cartSchema.methods.addItem = function(productId, quantity, price, variant = null) {
+cartSchema.methods.addItem = async function(productId, quantity, price, variant = null) {
+    const Product = mongoose.model('Product');
+    const product = await Product.findById(productId);
+    
+    if (!product) {
+        throw new Error('Product not found');
+    }
+ 
+
     const existingItemIndex = this.items.findIndex(item =>
         item.product.toString() === productId.toString() &&
         item.variant === variant
     );
 
     if (existingItemIndex > -1) {
-        this.items[existingItemIndex].quantity += quantity;
-        this.items[existingItemIndex].totalPrice = this.items[existingItemIndex].quantity * price;
+        const newQuantity = this.items[existingItemIndex].quantity + quantity;
+        
+      
+        
+        this.items[existingItemIndex].quantity = newQuantity;
+        this.items[existingItemIndex].totalPrice = newQuantity * price;
     } else {
         this.items.push({
             product: productId,
@@ -77,16 +89,28 @@ cartSchema.methods.addItem = function(productId, quantity, price, variant = null
             totalPrice: quantity * price
         });
     }
+    
+    return this;
 };
 
 cartSchema.methods.removeItem = function(productId, variant = null) {
     this.items = this.items.filter(item =>
         !(item.product.toString() === productId.toString() && item.variant === variant)
     );
+    return this;
 };
 
-// Method to update item quantity
-cartSchema.methods.updateItemQuantity = function(productId, quantity, variant = null) {
+cartSchema.methods.updateItemQuantity = async function(productId, quantity, variant = null) {
+    if (quantity > 0) {
+        const Product = mongoose.model('Product');
+        const product = await Product.findById(productId);
+        
+        if (!product) {
+            throw new Error('Product not found');
+        }
+        
+    }
+
     const itemIndex = this.items.findIndex(item =>
         item.product.toString() === productId.toString() &&
         item.variant === variant
@@ -100,6 +124,24 @@ cartSchema.methods.updateItemQuantity = function(productId, quantity, variant = 
             this.items[itemIndex].totalPrice = quantity * this.items[itemIndex].price;
         }
     }
+    
+    return this;
+};
+
+cartSchema.methods.clearCart = function() {
+    this.items = [];
+    return this;
+};
+
+cartSchema.statics.findOrCreateCart = async function(userId) {
+    let cart = await this.findOne({ user: userId }).populate('items.product');
+    
+    if (!cart) {
+        cart = new this({ user: userId });
+        await cart.save();
+    }
+    
+    return cart;
 };
 
 module.exports = mongoose.model('Cart', cartSchema);

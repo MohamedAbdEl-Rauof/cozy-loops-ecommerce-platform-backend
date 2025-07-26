@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./src/config/database');
-const { initializeSocket } = require('./src/config/socket');
+const { initSocket } = require('./src/sockets/cartSocket');
 
 dotenv.config();
 
@@ -16,7 +16,7 @@ const app = express();
 
 const server = http.createServer(app);
 
-const io = initializeSocket(server);
+initSocket(server);
 
 app.use(helmet());
 app.use(express.json());
@@ -40,6 +40,8 @@ const makerRoutes = require('./src/routes/makerRoutes');
 const reviewRoutes = require('./src/routes/reviewRoutes');
 const addressRoutes = require('./src/routes/addressRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
+const wishlistRoutes = require('./src/routes/wishlistRoutes');
+const paymentRoutes = require('./src/routes/stripePayment');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -49,7 +51,8 @@ app.use('/api/makers', makerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/cart', cartRoutes);
-
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/payment', paymentRoutes);
 app.get('/', (req, res) => {
   res.json({
     message: 'Cozy Loops E-commerce API',
