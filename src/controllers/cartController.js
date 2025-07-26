@@ -44,8 +44,20 @@ exports.addToCart = async (req, res) => {
     let cart = await Cart.findOrCreateCart(userId);
 
     // Add item to cart
-    await cart.addItem(productId, quantity, product.price, variant);
-    await cart.save();
+    try {
+      await cart.addItem(productId, quantity, product.price, variant);
+      await cart.save();
+    } catch (error) {
+      if (error.message.includes('Cannot modify cart with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          cartStatus: cart.status,
+          suggestion: 'Your previous cart has been processed. A new cart will be created for you.'
+        });
+      }
+      throw error;
+    }
 
     // Populate cart items for response
     await cart.populate('items.product');
@@ -76,8 +88,8 @@ exports.addToCart = async (req, res) => {
 
   } catch (error) {
     console.error('Add to cart error:', error);
-    res.status(500).json({ 
-      message: error.message || 'Server error while adding item to cart' 
+    res.status(500).json({
+      message: error.message || 'Server error while adding item to cart'
     });
   }
 };
@@ -100,14 +112,16 @@ exports.getCart = async (req, res) => {
         items: cart.items,
         totalItems: cart.totalItems,
         totalAmount: cart.totalAmount,
+        status: cart.status,
+        orderId: cart.orderId,
         lastUpdated: cart.lastUpdated
       }
     });
 
   } catch (error) {
     console.error('Get cart error:', error);
-    res.status(500).json({ 
-      message: 'Server error while retrieving cart' 
+    res.status(500).json({
+      message: 'Server error while retrieving cart'
     });
   }
 };
@@ -143,22 +157,44 @@ exports.updateQuantity = async (req, res) => {
       });
     }
 
-    // Check if item exists in cart
-    const itemExists = cart.items.some(item =>
-      item.product.toString() === productId.toString() &&
-      item.variant === variant
-    );
+    // Find the specific item in cart with better comparison
+    const itemIndex = cart.items.findIndex(item => {
+      const productMatch = item.product.toString() === productId.toString();
+      const variantMatch = (item.variant === variant) || 
+                          (item.variant === null && variant === null) ||
+                          (item.variant === undefined && variant === null);
+      return productMatch && variantMatch;
+    });
 
-    if (!itemExists) {
+    if (itemIndex === -1) {
       return res.status(404).json({
-        message: 'Item not found in cart'
+        message: 'Item not found in cart',
+        debug: {
+          searchingFor: { productId, variant },
+          cartItems: cart.items.map(item => ({
+            productId: item.product.toString(),
+            variant: item.variant
+          }))
+        }
       });
     }
 
     // Update item quantity
-    await cart.updateItemQuantity(productId, quantity, variant);
-    await cart.save();
-    await cart.populate('items.product');
+    try {
+      await cart.updateItemQuantity(productId, quantity, variant);
+      await cart.save();
+      await cart.populate('items.product');
+    } catch (error) {
+      if (error.message.includes('Cannot modify cart with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          cartStatus: cart.status,
+          suggestion: 'Your cart has been processed and cannot be modified.'
+        });
+      }
+      throw error;
+    }
 
     // Emit real-time update
     try {
@@ -230,9 +266,21 @@ exports.removeItem = async (req, res) => {
     }
 
     // Remove item from cart
-    cart.removeItem(productId, variant);
-    await cart.save();
-    await cart.populate('items.product');
+    try {
+      cart.removeItem(productId, variant);
+      await cart.save();
+      await cart.populate('items.product');
+    } catch (error) {
+      if (error.message.includes('Cannot modify cart with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          cartStatus: cart.status,
+          suggestion: 'Your cart has been processed and cannot be modified.'
+        });
+      }
+      throw error;
+    }
 
     // Emit real-time update
     try {
@@ -260,8 +308,8 @@ exports.removeItem = async (req, res) => {
 
   } catch (error) {
     console.error('Remove item error:', error);
-    res.status(500).json({ 
-      message: 'Server error while removing item from cart' 
+    res.status(500).json({
+      message: 'Server error while removing item from cart'
     });
   }
 };
@@ -291,8 +339,20 @@ exports.clearCart = async (req, res) => {
     }
 
     // Clear cart
-    cart.clearCart();
-    await cart.save();
+    try {
+      cart.clearCart();
+      await cart.save();
+    } catch (error) {
+      if (error.message.includes('Cannot modify cart with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          cartStatus: cart.status,
+          suggestion: 'Your cart has been processed and cannot be cleared.'
+        });
+      }
+      throw error;
+    }
 
     // Emit real-time update
     try {
@@ -319,8 +379,64 @@ exports.clearCart = async (req, res) => {
 
   } catch (error) {
     console.error('Clear cart error:', error);
-    res.status(500).json({ 
-      message: 'Server error while clearing cart' 
+    res.status(500).json({
+      message: 'Server error while clearing cart'
+    });
+  }
+};
+
+/**
+ * Get user's cart history (completed carts)
+ * @route GET /api/cart/history
+ * @access Private
+ */
+exports.getCartHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { page = 1, limit = 10 } = req.query;
+
+    const carts = await Cart.find({
+      user: userId,
+      status: { $in: ['completed', 'processing'] }
+    })
+      .populate('items.product')
+      .populate('orderId')
+      .sort({ updatedAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Cart.countDocuments({
+      user: userId,
+      status: { $in: ['completed', 'processing'] }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        carts: carts.map(cart => ({
+          _id: cart._id,
+          items: cart.items,
+          totalItems: cart.totalItems,
+          totalAmount: cart.totalAmount,
+          status: cart.status,
+          orderId: cart.orderId,
+          createdAt: cart.createdAt,
+          updatedAt: cart.updatedAt
+        })),
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get cart history error:', error);
+    res.status(500).json({
+      message: 'Server error while retrieving cart history'
     });
   }
 };

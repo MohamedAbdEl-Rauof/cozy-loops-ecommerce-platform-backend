@@ -69,13 +69,22 @@ const createPaymentIntent = async (req, res) => {
       if (cartId) {
         cart = await Cart.findById(cartId).populate('items.product');
       } else {
-        cart = await Cart.findOne({ user: finalUserId }).populate('items.product');
+        cart = await Cart.findOne({ user: finalUserId, status: 'active' }).populate('items.product');
       }
 
       if (!cart || cart.items.length === 0) {
         return res.status(400).json({
           success: false,
           message: 'Cart is empty or not found, and no amount specified'
+        });
+      }
+
+      // Check if cart can be used for payment
+      if (!cart.canProcessPayment()) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot process payment for cart with status: ${cart.status}. Please create a new cart.`,
+          cartStatus: cart.status
         });
       }
 
@@ -134,6 +143,22 @@ const createPaymentIntent = async (req, res) => {
     });
 
     await order.save();
+
+    // Mark cart as processing if it exists and is not a direct payment
+    if (cartId && cartId !== 'direct-payment') {
+      const cartToUpdate = await Cart.findById(cartId);
+      if (cartToUpdate && cartToUpdate.status === 'active') {
+        cartToUpdate.markAsProcessing(order._id);
+        await cartToUpdate.save();
+      }
+    } else if (!amount) {
+      // For regular cart payments (not direct payments)
+      const cartToUpdate = await Cart.findOne({ user: finalUserId, status: 'active' });
+      if (cartToUpdate) {
+        cartToUpdate.markAsProcessing(order._id);
+        await cartToUpdate.save();
+      }
+    }
 
     console.log('Real payment intent created:', {
       orderId: order._id,
@@ -209,12 +234,30 @@ const verifyPayment = async (req, res) => {
         order.paidAt = new Date();
         await order.save();
 
-        // Clear cart if it exists
+        // Mark cart as completed instead of clearing it
         if (paymentIntent.metadata.cartId && paymentIntent.metadata.cartId !== 'direct-payment') {
-          await Cart.findOneAndUpdate(
-            { user: order.user._id },
-            { $set: { items: [] } }
-          );
+          const cartToComplete = await Cart.findOne({ 
+            user: order.user._id, 
+            orderId: order._id,
+            status: 'processing'
+          });
+          
+          if (cartToComplete) {
+            cartToComplete.markAsCompleted();
+            await cartToComplete.save();
+          }
+        } else if (order.items.length > 0 && order.items[0].product) {
+          // For regular cart payments (not direct payments)
+          const cartToComplete = await Cart.findOne({ 
+            user: order.user._id, 
+            orderId: order._id,
+            status: 'processing'
+          });
+          
+          if (cartToComplete) {
+            cartToComplete.markAsCompleted();
+            await cartToComplete.save();
+          }
         }
       }
 

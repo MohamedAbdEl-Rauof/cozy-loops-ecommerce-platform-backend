@@ -44,6 +44,16 @@ const cartSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    status: {
+        type: String,
+        enum: ['active', 'processing', 'completed'],
+        default: 'active'
+    },
+    orderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order',
+        default: null
+    },
     lastUpdated: {
         type: Date,
         default: Date.now
@@ -60,6 +70,11 @@ cartSchema.pre('save', function(next) {
 });
 
 cartSchema.methods.addItem = async function(productId, quantity, price, variant = null) {
+    // Check if cart is active before allowing modifications
+    if (this.status !== 'active') {
+        throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
+    }
+
     const Product = mongoose.model('Product');
     const product = await Product.findById(productId);
     
@@ -94,6 +109,11 @@ cartSchema.methods.addItem = async function(productId, quantity, price, variant 
 };
 
 cartSchema.methods.removeItem = function(productId, variant = null) {
+    // Check if cart is active before allowing modifications
+    if (this.status !== 'active') {
+        throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
+    }
+
     this.items = this.items.filter(item =>
         !(item.product.toString() === productId.toString() && item.variant === variant)
     );
@@ -101,6 +121,11 @@ cartSchema.methods.removeItem = function(productId, variant = null) {
 };
 
 cartSchema.methods.updateItemQuantity = async function(productId, quantity, variant = null) {
+    // Check if cart is active before allowing modifications
+    if (this.status !== 'active') {
+        throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
+    }
+
     if (quantity > 0) {
         const Product = mongoose.model('Product');
         const product = await Product.findById(productId);
@@ -129,19 +154,48 @@ cartSchema.methods.updateItemQuantity = async function(productId, quantity, vari
 };
 
 cartSchema.methods.clearCart = function() {
+    // Check if cart is active before allowing modifications
+    if (this.status !== 'active') {
+        throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
+    }
+
     this.items = [];
     return this;
 };
 
 cartSchema.statics.findOrCreateCart = async function(userId) {
-    let cart = await this.findOne({ user: userId }).populate('items.product');
+    let cart = await this.findOne({ user: userId, status: 'active' }).populate('items.product');
     
     if (!cart) {
-        cart = new this({ user: userId });
+        cart = new this({ user: userId, status: 'active' });
         await cart.save();
     }
     
     return cart;
+};
+
+// Method to mark cart as processing (when payment intent is created)
+cartSchema.methods.markAsProcessing = function(orderId) {
+    if (this.status !== 'active') {
+        throw new Error(`Cannot process cart with status: ${this.status}`);
+    }
+    this.status = 'processing';
+    this.orderId = orderId;
+    return this;
+};
+
+// Method to mark cart as completed (when payment is successful)
+cartSchema.methods.markAsCompleted = function() {
+    if (this.status !== 'processing') {
+        throw new Error(`Cannot complete cart with status: ${this.status}`);
+    }
+    this.status = 'completed';
+    return this;
+};
+
+// Method to check if cart can be used for payment
+cartSchema.methods.canProcessPayment = function() {
+    return this.status === 'active' && this.items.length > 0;
 };
 
 module.exports = mongoose.model('Cart', cartSchema);
