@@ -1,8 +1,6 @@
-
-const stripe = require('../config/stripe');
-const Cart = require('../models/Cart');
 const Order = require('../models/Order');
-const User = require('../models/User');
+const Cart = require('../models/Cart');
+const stripe = require('../config/stripe');
 
 /**
  * Create payment intent for an order
@@ -160,14 +158,16 @@ exports.verifyPayment = async (req, res) => {
           paymentStatus: order.paymentStatus,
           orderStatus: order.orderStatus,
           totalAmount: order.totalAmount
-        }
+        },
+        redirectUrl: `/order-confirmation?orderId=${order.orderNumber}`
       });
 
     } else if (paymentIntent.status === 'requires_payment_method') {
       res.status(400).json({
         success: false,
         message: 'Payment failed - requires new payment method',
-        paymentStatus: paymentIntent.status
+        paymentStatus: paymentIntent.status,
+        redirectUrl: '/payment/failed'
       });
 
     } else if (paymentIntent.status === 'canceled') {
@@ -178,14 +178,24 @@ exports.verifyPayment = async (req, res) => {
       res.status(400).json({
         success: false,
         message: 'Payment was canceled',
-        paymentStatus: paymentIntent.status
+        paymentStatus: paymentIntent.status,
+        redirectUrl: '/payment/error'
+      });
+
+    } else if (paymentIntent.status === 'requires_action') {
+      res.status(400).json({
+        success: false,
+        message: 'Payment requires additional action',
+        paymentStatus: paymentIntent.status,
+        redirectUrl: '/payment/failed'
       });
 
     } else {
       res.status(400).json({
         success: false,
         message: `Payment is in ${paymentIntent.status} status`,
-        paymentStatus: paymentIntent.status
+        paymentStatus: paymentIntent.status,
+        redirectUrl: '/payment/error'
       });
     }
 
@@ -194,7 +204,8 @@ exports.verifyPayment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while verifying payment',
-      error: error.message
+      error: error.message,
+      redirectUrl: '/payment/error'
     });
   }
 };
