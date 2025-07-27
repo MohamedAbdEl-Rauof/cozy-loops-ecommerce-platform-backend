@@ -5,14 +5,11 @@ const {
   getUserOrders,
   getOrderById,
   getOrderByNumber,
-  updateOrderStatus,
-  cancelOrder
+
 } = require('../controllers/orderController');
 
-// Apply authentication middleware to all routes
 router.use(protect);
 
-// Order routes
 router.route('/')
   .get(getUserOrders);
 
@@ -21,9 +18,6 @@ router.route('/number/:orderNumber')
 
 router.route('/:id')
   .get(getOrderById)
-  .put(updateOrderStatus);
 
-router.route('/:id/cancel')
-  .put(cancelOrder);
 
 module.exports = router;
