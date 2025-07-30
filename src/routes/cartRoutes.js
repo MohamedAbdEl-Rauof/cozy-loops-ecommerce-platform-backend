@@ -4,7 +4,8 @@ const {
     getCart,
     updateQuantity,
     removeItem,
-    clearCart,
+    getCartHistory,
+    checkoutCart
 } = require('../controllers/cartController');
 const { protect } = require('../middleware/authMiddleware');
 const { 
@@ -23,11 +24,11 @@ router.use(validateCartOperationRate);
 
 router.route('/')
     .get(getCart)
-    .delete(clearCart);
 
 router.post('/add', validateAddToCart, addToCart);
 router.put('/update', validateUpdateQuantity, validateCartItemExists, updateQuantity);
 router.delete('/remove', validateRemoveItem, validateCartItemExists, removeItem);
-
+router.get('/history', getCartHistory);
+router.post('/checkout', protect,checkoutCart);
 
 module.exports = router;

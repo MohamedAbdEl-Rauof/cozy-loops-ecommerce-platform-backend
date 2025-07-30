@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "Backend API for Cozy Loops E-commerce platform",
   "dependencies": {
+    "@mui/lab": "^7.0.0-beta.14",
+    "axios": "^1.11.0",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

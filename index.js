@@ -42,6 +42,7 @@ const addressRoutes = require('./src/routes/addressRoutes');
 const cartRoutes = require('./src/routes/cartRoutes');
 const wishlistRoutes = require('./src/routes/wishlistRoutes');
 const paymentRoutes = require('./src/routes/stripePayment');
+const orderRoutes = require('./src/routes/orderRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -53,6 +54,7 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/orders', orderRoutes);
 app.get('/', (req, res) => {
   res.json({
     message: 'Cozy Loops E-commerce API',
