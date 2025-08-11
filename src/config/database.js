@@ -7,7 +7,6 @@ const connectDB = async () => {
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`📁 Database: ${conn.connection.name}`);
 
-    // Load models
     require('../models');
     
     return conn;
