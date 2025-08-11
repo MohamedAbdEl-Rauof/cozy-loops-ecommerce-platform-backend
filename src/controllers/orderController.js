@@ -119,3 +119,55 @@ exports.getOrderById = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get order for payment (includes payment intent details)
+ * @route GET /api/orders/:id/payment
+ * @access Private
+ */
+exports.getOrderForPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const order = await Order.findOne({ 
+      _id: id,
+      user: userId 
+    }).populate('items.product', 'name images price');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Return order with payment-specific information
+    res.status(200).json({
+      success: true,
+      order: {
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        items: order.items,
+        subtotal: order.subtotal,
+        shippingCost: order.shippingCost,
+        tax: order.tax,
+        totalAmount: order.totalAmount,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        paymentIntentId: order.paymentIntentId,
+        shippingAddress: order.shippingAddress,
+        createdAt: order.createdAt,
+        canPay: order.paymentStatus === 'pending' || order.paymentStatus === 'processing'
+      }
+    });
+
+  } catch (error) {
+    console.error('Get order for payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching order',
+      error: error.message
+    });
+  }
+};

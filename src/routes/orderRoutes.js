@@ -5,7 +5,7 @@ const {
   getUserOrders,
   getOrderById,
   getOrderByNumber,
-
+  getOrderForPayment
 } = require('../controllers/orderController');
 
 router.use(protect);
@@ -18,6 +18,9 @@ router.route('/number/:orderNumber')
 
 router.route('/:id')
   .get(getOrderById)
+
+router.get('/:id/payment', protect, getOrderForPayment);
+
 
 
 module.exports = router;

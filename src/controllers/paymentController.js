@@ -21,7 +21,7 @@ exports.createPaymentIntent = async (req, res) => {
 
     // Find the order
     const order = await Order.findById(orderId).populate('items.product');
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -37,15 +37,46 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Check if order can be paid
-    if (order.paymentStatus !== 'pending') {
+    // Handle existing payment intent
+    if (order.paymentIntentId && order.paymentStatus === 'processing') {
+      try {
+        // Try to retrieve existing payment intent from Stripe
+        const existingPaymentIntent = await stripe.paymentIntents.retrieve(order.paymentIntentId);
+
+        if (existingPaymentIntent && existingPaymentIntent.status !== 'canceled') {
+          // Return existing payment intent
+          return res.status(200).json({
+            success: true,
+            data: {
+              clientSecret: existingPaymentIntent.client_secret,
+              paymentIntentId: existingPaymentIntent.id,
+              orderId: order._id,
+              orderNumber: order.orderNumber,
+              amount: order.totalAmount,
+              breakdown: {
+                subtotal: order.subtotal,
+                shipping: order.shippingCost,
+                tax: order.tax,
+                total: order.totalAmount
+              }
+            },
+            message: 'Existing payment intent retrieved successfully'
+          });
+        }
+      } catch (stripeError) {
+        console.error('Existing payment intent not found or invalid, creating new one:', stripeError.message);
+      }
+    }
+
+    // Check if order can be paid (allow both pending and processing)
+    if (!['pending', 'processing'].includes(order.paymentStatus)) {
       return res.status(400).json({
         success: false,
         message: `Cannot create payment for order with payment status: ${order.paymentStatus}`
       });
     }
 
-    // Create payment intent with Stripe
+    // Create new payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(order.totalAmount * 100), // Convert to cents
       currency: 'usd',
@@ -59,8 +90,11 @@ exports.createPaymentIntent = async (req, res) => {
       },
     });
 
-    // Update order with payment intent ID
+    // Update order with payment intent ID and set status to processing
     order.setPaymentIntent(paymentIntent.id);
+    if (order.paymentStatus === 'pending') {
+      order.paymentStatus = 'processing';
+    }
     await order.save();
 
     res.status(200).json({
@@ -90,7 +124,6 @@ exports.createPaymentIntent = async (req, res) => {
     });
   }
 };
-
 /**
  * Verify payment and complete order
  * @route POST /api/payment/verify

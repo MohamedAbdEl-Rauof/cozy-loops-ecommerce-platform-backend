@@ -46,19 +46,8 @@ exports.addToCart = async (req, res) => {
       status: { $in: ['active', 'processing'] }
     }).populate('items.product');
 
-    console.log('🔍 ADD TO CART DEBUG:', {
-      userId: userId.toString(),
-      productId,
-      quantity,
-      variant,
-      existingCart: !!cart,
-      cartStatus: cart?.status,
-      timestamp: new Date().toISOString()
-    });
-
     // If no cart exists or existing cart is not active, create new active cart
     if (!cart || cart.status !== 'active') {
-      console.log('🆕 CREATING NEW ACTIVE CART');
       cart = new Cart({
         user: userId,
         items: [],
@@ -66,7 +55,6 @@ exports.addToCart = async (req, res) => {
       });
       await cart.save();
       await cart.populate('items.product');
-      console.log('✅ NEW CART CREATED:', cart._id.toString());
     }
 
     // Add item to cart
@@ -187,14 +175,6 @@ exports.updateQuantity = async (req, res) => {
     const { productId, quantity, variant = null } = req.body;
     const userId = req.user._id;
 
-    console.log('🔍 UPDATE QUANTITY DEBUG:', {
-      userId: userId.toString(),
-      productId,
-      quantity,
-      variant,
-      timestamp: new Date().toISOString()
-    });
-
     // Validate input
     if (!productId) {
       return res.status(400).json({
@@ -211,17 +191,7 @@ exports.updateQuantity = async (req, res) => {
     // Find ACTIVE cart only (this is the key fix)
     let cart = await Cart.findOne({ user: userId, status: 'active' });
     
-    console.log('🛒 CART FOUND:', {
-      cartExists: !!cart,
-      cartId: cart?._id?.toString(),
-      cartStatus: cart?.status,
-      itemCount: cart?.items?.length || 0,
-      items: cart?.items?.map(item => ({
-        productId: item.product.toString(),
-        variant: item.variant,
-        quantity: item.quantity
-      })) || []
-    });
+  
 
     if (!cart) {
       return res.status(404).json({
@@ -239,24 +209,11 @@ exports.updateQuantity = async (req, res) => {
         (item.variant === undefined && variant === null) ||
         (item.variant === null && variant === undefined);
       
-      console.log('🔍 ITEM COMPARISON:', {
-        itemProductId: item.product.toString(),
-        searchProductId: productId.toString(),
-        productMatch,
-        itemVariant: item.variant,
-        searchVariant: variant,
-        variantMatch,
-        overallMatch: productMatch && variantMatch
-      });
       
       return productMatch && variantMatch;
     });
 
-    console.log('📍 ITEM INDEX RESULT:', {
-      itemIndex,
-      found: itemIndex !== -1
-    });
-
+  
     if (itemIndex === -1) {
       return res.status(404).json({
         success: false,
@@ -274,13 +231,10 @@ exports.updateQuantity = async (req, res) => {
       });
     }
 
-    // Update item quantity
     try {
-      console.log('🔄 UPDATING ITEM QUANTITY...');
       await cart.updateItemQuantity(productId, quantity, variant);
       await cart.save();
       await cart.populate('items.product');
-      console.log('✅ ITEM QUANTITY UPDATED SUCCESSFULLY');
     } catch (error) {
       console.error('❌ UPDATE QUANTITY ERROR:', error.message);
       if (error.message.includes('Cannot modify cart with status')) {
@@ -567,7 +521,37 @@ exports.getCartHistory = async (req, res) => {
 exports.checkoutCart = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { shippingCost = 0, shippingAddress = null } = req.body;
+    const { shippingCost = 0, shippingAddress = null, orderId = null } = req.body;
+
+    // If orderId is provided, check if order already exists
+    if (orderId) {
+      const Order = require('../models/Order');
+      const existingOrder = await Order.findOne({ 
+        _id: orderId, 
+        user: userId 
+      });
+
+      if (existingOrder) {
+        // Return existing order data for payment continuation
+        return res.status(200).json({
+          success: true,
+          message: 'Existing order found',
+          order: {
+            _id: existingOrder._id,
+            orderNumber: existingOrder.orderNumber,
+            items: existingOrder.items,
+            subtotal: existingOrder.subtotal,
+            shippingCost: existingOrder.shippingCost,
+            tax: existingOrder.tax,
+            totalAmount: existingOrder.totalAmount,
+            orderStatus: existingOrder.orderStatus,
+            paymentStatus: existingOrder.paymentStatus,
+            paymentIntentId: existingOrder.paymentIntentId,
+            createdAt: existingOrder.createdAt
+          }
+        });
+      }
+    }
 
     // Find active cart
     const cart = await Cart.findOne({ user: userId, status: 'active' })

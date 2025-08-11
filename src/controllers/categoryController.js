@@ -31,7 +31,7 @@ exports.getCategory = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const isValidObjectId = mongoose.Types.ObjectId.isValid(id);
-    
+
     let query;
     if (isValidObjectId) {
       query = {
@@ -61,23 +61,23 @@ exports.getCategory = async (req, res) => {
 
     let products = [];
     let totalProducts = 0;
-    
+
     try {
-      products = await Product.find({ 
-        category: category._id, 
-        isActive: true 
+      products = await Product.find({
+        category: category._id,
+        isActive: true
       })
         .populate('category', 'name slug')
         .sort({ featured: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit);
 
-      totalProducts = await Product.countDocuments({ 
-        category: category._id, 
-        isActive: true 
+      totalProducts = await Product.countDocuments({
+        category: category._id,
+        isActive: true
       });
     } catch (productError) {
-        console.log('Product operations skipped:', productError.message);
+      console.error('Product operations skipped:', productError.message);
     }
 
     res.json({
