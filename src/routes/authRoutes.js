@@ -22,4 +22,8 @@ router.post('/verify-otp', authController.verifyOTP);
 
 router.post('/reset-password/:token', resetPasswordValidation, authController.resetPassword);
 
+router.post('/google', authController.googleAuth);
+
+router.post('/instagram', authController.instagramLogin);
+
 module.exports = router;

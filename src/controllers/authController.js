@@ -8,9 +8,9 @@ const {
   createVerificationUrl,
   createVerificationEmailHtml
 } = require('../utils/emailUtils');
-
 const { generateOTP, hashOTP, verifyOTP, generateResetToken } = require('../utils/otpUtils');
 const { createOTPEmailHtml, createPasswordResetConfirmationHtml } = require('../utils/otpEmailTemplates');
+const { verifyGoogleToken } = require('../utils/googleAuth');
 
 /**
  * Register a new user
@@ -105,7 +105,6 @@ exports.register = async (req, res) => {
     res.status(500).json({ message: 'Server error during registration' });
   }
 };
-
 
 /**
  * Verify email
@@ -646,5 +645,241 @@ exports.resetPassword = async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Server error during password reset' });
+  }
+};
+
+/**
+ * Google OAuth login/register
+ * @route POST /api/auth/google
+ * @access Public
+ */
+exports.googleAuth = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google token is required'
+      });
+    }
+
+    // Verify Google token
+    let googleUser;
+    try {
+      googleUser = await verifyGoogleToken(token);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Google token'
+      });
+    }
+
+    // Check if user exists with this Google ID
+    let user = await User.findOne({ googleId: googleUser.googleId });
+    let isNewUser = false;
+
+    if (user) {
+      // User exists with Google ID - login
+      if (!user.active) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated. Please contact support.'
+        });
+      }
+
+      // Update user info if needed
+      let updated = false;
+      if (user.profilePicture !== googleUser.picture) {
+        user.profilePicture = googleUser.picture;
+        updated = true;
+      }
+      
+      if (updated) {
+        await user.save();
+      }
+    } else {
+      // Check if user exists with same email but different auth method
+      const existingUser = await User.findOne({ email: googleUser.email });
+      
+      if (existingUser) {
+        // Link Google account to existing user
+        existingUser.googleId = googleUser.googleId;
+        existingUser.profilePicture = googleUser.picture;
+        existingUser.emailVerified = true; // Google emails are verified
+        await existingUser.save();
+        user = existingUser;
+      } else {
+        // Create new user
+        user = new User({
+          firstName: googleUser.firstName,
+          lastName: googleUser.lastName,
+          email: googleUser.email,
+          googleId: googleUser.googleId,
+          profilePicture: googleUser.picture,
+          emailVerified: true, // Google emails are verified
+          authProvider: 'google',
+          // No password needed for OAuth users
+        });
+
+        await user.save();
+        isNewUser = true;
+      }
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken({
+      id: user._id.toString(),
+      role: user.role
+    });
+
+    const refreshToken = generateRefreshToken({
+      id: user._id.toString()
+    });
+
+    // Save refresh token to user
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    // Set cookies
+    setTokenCookies(res, accessToken, refreshToken);
+
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: 'Google authentication successful',
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        profilePicture: user.profilePicture
+      },
+      accessToken,
+      refreshToken,
+      isNewUser
+    });
+
+  } catch (error) {
+    console.error('Google auth error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during Google authentication'
+    });
+  }
+};
+
+
+/**
+ * Instagram OAuth login
+ * @route POST /api/auth/instagram
+ * @access Public
+ */
+exports.instagramLogin = async (req, res) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ message: 'Authorization code is required' });
+    }
+
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.INSTAGRAM_CLIENT_ID,
+        client_secret: process.env.INSTAGRAM_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: process.env.INSTAGRAM_REDIRECT_URI,
+        code: code,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error('Failed to exchange code for token');
+    }
+
+    const tokenData = await tokenResponse.json();
+
+    // Get user profile from Instagram
+    const profileResponse = await fetch(`https://graph.instagram.com/me?fields=id,username,account_type&access_token=${tokenData.access_token}`);
+    
+    if (!profileResponse.ok) {
+      throw new Error('Failed to fetch user profile');
+    }
+
+    const profile = await profileResponse.json();
+
+    // Check if user exists
+    let user = await User.findOne({ 
+      $or: [
+        { instagramId: profile.id },
+        { email: `${profile.username}@instagram.local` } // Fallback email since Instagram doesn't provide email
+      ]
+    });
+
+    if (!user) {
+      // Create new user
+      user = new User({
+        firstName: profile.username,
+        lastName: '',
+        email: `${profile.username}@instagram.local`,
+        instagramId: profile.id,
+        instagramUsername: profile.username,
+        emailVerified: true, // Consider Instagram accounts as verified
+        authProvider: 'instagram'
+      });
+
+      await user.save();
+    } else {
+      // Update existing user with Instagram info
+      user.instagramId = profile.id;
+      user.instagramUsername = profile.username;
+      await user.save();
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken({
+      id: user._id,
+      role: user.role
+    });
+
+    const refreshToken = generateRefreshToken({
+      id: user._id
+    });
+
+    // Save refresh token
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    // Set cookies
+    setTokenCookies(res, accessToken, refreshToken);
+
+    res.status(200).json({
+      success: true,
+      message: 'Instagram login successful',
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        instagramUsername: user.instagramUsername
+      },
+      accessToken,
+      refreshToken
+    });
+
+  } catch (error) {
+    console.error('Instagram login error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Instagram login failed',
+      error: error.message 
+    });
   }
 };
