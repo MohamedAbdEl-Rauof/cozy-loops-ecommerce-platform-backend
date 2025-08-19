@@ -24,6 +24,6 @@ router.post('/reset-password/:token', resetPasswordValidation, authController.re
 
 router.post('/google', authController.googleAuth);
 
-router.post('/instagram', authController.instagramLogin);
+router.post('/linkedin/callback', authController.linkedinCallback);
 
 module.exports = router;
