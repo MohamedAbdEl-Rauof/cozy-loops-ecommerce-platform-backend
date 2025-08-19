@@ -32,8 +32,8 @@ const addressSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   }
-}, { 
-  timestamps: true 
+}, {
+  timestamps: true
 });
 
 const userSchema = new mongoose.Schema({
@@ -60,12 +60,12 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() {
+    required: function () {
       // Password is only required if user doesn't have OAuth providers
       return !this.googleId && this.authProvider === 'local';
     },
     minlength: [8, 'Password must be at least 8 characters'],
-    select: false 
+    select: false
   },
   role: {
     type: String,
@@ -89,12 +89,12 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpire: Date,
   Avatar: {
     type: String,
-    default: 'https://media.istockphoto.com/id/1337144146/vector/default-avatar-profile-icon-vector.jpg?s=612x612&w=0&k=20&c=BIbFwuv7FxTWvh5S3vB6bkT0Qv8Vn8N5Ffseq84ClGI=' 
+    default: 'https://media.istockphoto.com/id/1337144146/vector/default-avatar-profile-icon-vector.jpg?s=612x612&w=0&k=20&c=BIbFwuv7FxTWvh5S3vB6bkT0Qv8Vn8N5Ffseq84ClGI='
   },
   otp: {
-    code : {
+    code: {
       type: String,
-     select: false
+      select: false
     },
     expiresAt: {
       type: Date,
@@ -106,26 +106,17 @@ const userSchema = new mongoose.Schema({
     sparse: true,
     unique: true
   },
+  linkedinId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
   profilePicture: {
     type: String
   },
   authProvider: {
     type: String,
-    enum: ['local', 'google', 'apple'],
-    default: 'local'
-  },
-   instagramId: {
-    type: String,
-    unique: true,
-    sparse: true
-  },
-  instagramUsername: {
-    type: String,
-    sparse: true
-  },
-  authProvider: {
-    type: String,
-    enum: ['local', 'google', 'instagram'],
+    enum: ['local', 'google', 'linkedin'],
     default: 'local'
   },
 }, {
@@ -133,10 +124,10 @@ const userSchema = new mongoose.Schema({
 });
 
 // Hash password before saving (only if password exists)
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   // Skip password hashing if password is not modified or doesn't exist
   if (!this.isModified('password') || !this.password) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -147,23 +138,23 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to compare entered password with user's hashed password
-userSchema.methods.matchPassword = async function(enteredPassword) {
+userSchema.methods.matchPassword = async function (enteredPassword) {
   // Return false if user doesn't have a password (OAuth users)
   if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Method to generate password reset token
-userSchema.methods.createPasswordResetToken = function() {
+userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
-  
+
   this.resetPasswordToken = crypto
     .createHash('sha256')
     .update(resetToken)
     .digest('hex');
-    
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; 
-  
+
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
   return resetToken;
 };
 
