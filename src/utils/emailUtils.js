@@ -121,6 +121,29 @@ const createVerificationEmailHtml = (firstName, verificationUrl) => {
                         please ignore this email. Your security is important to us.
                     </p>
                 </div>
+
+                            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 30px; text-align: center; border-radius: 0 0 8px 8px; border-top: 1px solid #e9ecef;">
+                <p style="color: #6c757d; font-size: 14px; margin: 0 0 15px 0;">
+                    Best regards,<br>
+                    <strong style="color: #FF7043;">The Cozy Loops Team</strong>
+                </p>
+                
+                <!-- Social Media Links -->
+                <div style="margin-top: 20px;">
+                    <a href="https://twitter.com/cozyloops" style="display: inline-block; margin: 0 10px; color: #FF7043; text-decoration: none;">
+                        <span style="font-size: 20px;">🐦</span>
+                    </a>
+                    <a href="https://www.linkedin.com/company/cozy-loops/" style="display: inline-block; margin: 0 10px; color: #FF7043; text-decoration: none;">
+                        <span style="font-size: 20px;">💼</span>
+                    </a>
+                </div>
+                
+                <p style="color: #adb5bd; font-size: 12px; margin: 15px 0 0 0; line-height: 1.4;">
+                    © 2024 Cozy Loops. All rights reserved.<br>
+                    This email was sent to you as part of your account security.
+                </p>
+            </div>
             </div>
         </div>
         
