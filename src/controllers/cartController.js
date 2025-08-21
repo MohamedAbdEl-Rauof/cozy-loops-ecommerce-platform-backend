@@ -511,8 +511,6 @@ exports.getCartHistory = async (req, res) => {
   }
 };
 
-
-
 /**
  * Create order from cart (checkout)
  * @route POST /api/cart/checkout
