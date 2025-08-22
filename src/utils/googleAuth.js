@@ -13,9 +13,9 @@ const verifyGoogleToken = async (token) => {
       idToken: token,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-    
+
     const payload = ticket.getPayload();
-    
+
     return {
       googleId: payload.sub,
       email: payload.email,

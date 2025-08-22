@@ -1,6 +1,10 @@
 const { Maker, Product } = require('../models');
 
-// Get all makers
+/**
+ * Get all active makers with pagination
+ * @route GET /api/makers
+ * @access Public
+ */
 exports.getAllMakers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -34,7 +38,11 @@ exports.getAllMakers = async (req, res) => {
   }
 };
 
-// Get maker by ID or slug
+/**
+ * Get a single maker by ID or slug
+ * @route GET /api/makers/:id
+ * @access Public
+ */
 exports.getMaker = async (req, res) => {
   try {
     const { id } = req.params;
@@ -73,7 +81,11 @@ exports.getMaker = async (req, res) => {
   }
 };
 
-// Get products by maker
+/**
+ * Get products by maker with pagination
+ * @route GET /api/makers/:id/products
+ * @access Public
+ */
 exports.getMakerProducts = async (req, res) => {
   try {
     const { id } = req.params;
@@ -93,9 +105,9 @@ exports.getMakerProducts = async (req, res) => {
       });
     }
 
-    const products = await Product.find({ 
-      maker: maker._id, 
-      isActive: true 
+    const products = await Product.find({
+      maker: maker._id,
+      isActive: true
     })
       .populate('category', 'name slug')
       .populate('maker', 'name slug location')
@@ -103,9 +115,9 @@ exports.getMakerProducts = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    const total = await Product.countDocuments({ 
-      maker: maker._id, 
-      isActive: true 
+    const total = await Product.countDocuments({
+      maker: maker._id,
+      isActive: true
     });
 
     res.json({

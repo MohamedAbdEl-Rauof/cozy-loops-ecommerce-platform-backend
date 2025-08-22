@@ -8,11 +8,11 @@ const User = require('../models/User');
 exports.getAddresses = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('addresses');
-    
+
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found'
       });
     }
 
@@ -23,9 +23,9 @@ exports.getAddresses = async (req, res) => {
     });
   } catch (error) {
     console.error('Get addresses error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while fetching addresses' 
+      message: 'Server error while fetching addresses'
     });
   }
 };
@@ -47,11 +47,11 @@ exports.createAddress = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id);
-    
+
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found'
       });
     }
 
@@ -65,7 +65,7 @@ exports.createAddress = async (req, res) => {
 
     const newAddress = {
       type: type || 'shipping',
-      street: address, 
+      street: address,
       city,
       state,
       zipCode,
@@ -85,9 +85,9 @@ exports.createAddress = async (req, res) => {
     });
   } catch (error) {
     console.error('Create address error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while creating address' 
+      message: 'Server error while creating address'
     });
   }
 };
@@ -103,16 +103,16 @@ exports.updateAddress = async (req, res) => {
     const { type, address, city, state, zipCode, country, isDefault } = req.body;
 
     const user = await User.findById(req.user._id);
-    
+
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found'
       });
     }
 
     const addressToUpdate = user.addresses.id(id);
-    
+
     if (!addressToUpdate) {
       return res.status(404).json({
         success: false,
@@ -145,9 +145,9 @@ exports.updateAddress = async (req, res) => {
     });
   } catch (error) {
     console.error('Update address error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while updating address' 
+      message: 'Server error while updating address'
     });
   }
 };
@@ -162,16 +162,16 @@ exports.deleteAddress = async (req, res) => {
     const { id } = req.params;
 
     const user = await User.findById(req.user._id);
-    
+
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found'
       });
     }
 
     const addressToDelete = user.addresses.id(id);
-    
+
     if (!addressToDelete) {
       return res.status(404).json({
         success: false,
@@ -188,9 +188,9 @@ exports.deleteAddress = async (req, res) => {
     });
   } catch (error) {
     console.error('Delete address error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while deleting address' 
+      message: 'Server error while deleting address'
     });
   }
 };

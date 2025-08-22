@@ -69,7 +69,7 @@ cartSchema.pre('save', function (next) {
 });
 
 cartSchema.methods.addItem = async function (productId, quantity, price, variant = null) {
-    // Check if cart is active before allowing modifications
+
     if (this.status !== 'active') {
         throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
     }
@@ -81,7 +81,6 @@ cartSchema.methods.addItem = async function (productId, quantity, price, variant
         throw new Error('Product not found');
     }
 
-    // Better variant comparison to handle null/undefined cases
     const existingItemIndex = this.items.findIndex(item => {
         const productMatch = item.product.toString() === productId.toString();
         const variantMatch = (item.variant === variant) ||
@@ -109,12 +108,10 @@ cartSchema.methods.addItem = async function (productId, quantity, price, variant
 };
 
 cartSchema.methods.removeItem = function (productId, variant = null) {
-    // Check if cart is active before allowing modifications
     if (this.status !== 'active') {
         throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
     }
 
-    // Better variant comparison to handle null/undefined cases
     this.items = this.items.filter(item => {
         const productMatch = item.product.toString() === productId.toString();
         const variantMatch = (item.variant === variant) ||
@@ -127,7 +124,6 @@ cartSchema.methods.removeItem = function (productId, variant = null) {
 };
 
 cartSchema.methods.updateItemQuantity = async function (productId, quantity, variant = null) {
-    // Check if cart is active before allowing modifications
     if (this.status !== 'active') {
         throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
     }
@@ -141,7 +137,6 @@ cartSchema.methods.updateItemQuantity = async function (productId, quantity, var
         }
     }
 
-    // Better variant comparison to handle null/undefined cases
     const itemIndex = this.items.findIndex(item => {
         const productMatch = item.product.toString() === productId.toString();
         const variantMatch = (item.variant === variant) ||
@@ -166,7 +161,6 @@ cartSchema.methods.updateItemQuantity = async function (productId, quantity, var
 };
 
 cartSchema.methods.clearCart = function () {
-    // Check if cart is active before allowing modifications
     if (this.status !== 'active') {
         throw new Error(`Cannot modify cart with status: ${this.status}. Please create a new cart.`);
     }
@@ -176,12 +170,10 @@ cartSchema.methods.clearCart = function () {
 };
 
 cartSchema.statics.findOrCreateCart = async function (userId) {
-    // First try to find an active cart
     let cart = await this.findOne({ user: userId, status: 'active' })
         .populate('items.product');
 
     if (!cart) {
-        // If no active cart exists, create a new one
         cart = new this({
             user: userId,
             items: [],
@@ -194,18 +186,6 @@ cartSchema.statics.findOrCreateCart = async function (userId) {
     return cart;
 };
 
-
-// Method to mark cart as processing (when payment intent is created)
-cartSchema.methods.markAsProcessing = function (orderId) {
-    if (this.status !== 'active') {
-        throw new Error(`Cannot process cart with status: ${this.status}`);
-    }
-    this.status = 'processing';
-    this.orderId = orderId;
-    return this;
-};
-
-// Method to mark cart as completed (when payment is successful)
 cartSchema.methods.markAsCompleted = function () {
     if (this.status !== 'processing') {
         throw new Error(`Cannot complete cart with status: ${this.status}`);
@@ -214,18 +194,23 @@ cartSchema.methods.markAsCompleted = function () {
     return this;
 };
 
-// Method to check if cart can be used for payment
+cartSchema.methods.revertToActive = function () {
+    if (this.status === 'processing') {
+        this.status = 'active';
+        this.orderId = null;
+    }
+    return this;
+};
+
 cartSchema.methods.canProcessPayment = function () {
     return this.status === 'active' && this.items.length > 0;
 };
 
-// Create compound index to ensure only one active cart per user
-cartSchema.index({ user: 1, status: 1 }, { 
-    unique: true, 
+cartSchema.index({ user: 1, status: 1 }, {
+    unique: true,
     partialFilterExpression: { status: 'active' }
 });
 
-// Index for efficient cart queries
 cartSchema.index({ user: 1, status: 1 });
 cartSchema.index({ orderId: 1 });
 

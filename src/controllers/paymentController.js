@@ -19,7 +19,6 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Find the order
     const order = await Order.findById(orderId).populate('items.product');
 
     if (!order) {
@@ -29,7 +28,6 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Verify order belongs to user
     if (order.user.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
@@ -37,14 +35,11 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Handle existing payment intent
     if (order.paymentIntentId && order.paymentStatus === 'processing') {
       try {
-        // Try to retrieve existing payment intent from Stripe
         const existingPaymentIntent = await stripe.paymentIntents.retrieve(order.paymentIntentId);
 
         if (existingPaymentIntent && existingPaymentIntent.status !== 'canceled') {
-          // Return existing payment intent
           return res.status(200).json({
             success: true,
             data: {
@@ -68,7 +63,6 @@ exports.createPaymentIntent = async (req, res) => {
       }
     }
 
-    // Check if order can be paid (allow both pending and processing)
     if (!['pending', 'processing'].includes(order.paymentStatus)) {
       return res.status(400).json({
         success: false,
@@ -76,9 +70,8 @@ exports.createPaymentIntent = async (req, res) => {
       });
     }
 
-    // Create new payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(order.totalAmount * 100), // Convert to cents
+      amount: Math.round(order.totalAmount * 100),
       currency: 'usd',
       metadata: {
         orderId: order._id.toString(),
@@ -90,7 +83,6 @@ exports.createPaymentIntent = async (req, res) => {
       },
     });
 
-    // Update order with payment intent ID and set status to processing
     order.setPaymentIntent(paymentIntent.id);
     if (order.paymentStatus === 'pending') {
       order.paymentStatus = 'processing';
@@ -124,6 +116,7 @@ exports.createPaymentIntent = async (req, res) => {
     });
   }
 };
+
 /**
  * Verify payment and complete order
  * @route POST /api/payment/verify
@@ -141,7 +134,6 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (!paymentIntent) {
@@ -151,7 +143,6 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Find order by payment intent ID
     const order = await Order.findOne({ paymentIntentId: paymentIntentId });
 
     if (!order) {
@@ -161,7 +152,6 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Verify order belongs to user
     if (order.user.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
@@ -169,13 +159,10 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    // Check payment status
     if (paymentIntent.status === 'succeeded') {
-      // Mark order as paid
       order.markPaymentCompleted();
       await order.save();
 
-      // Find and mark associated cart as completed
       const cart = await Cart.findOne({ orderId: order._id });
       if (cart) {
         cart.markAsCompleted();
@@ -204,10 +191,8 @@ exports.verifyPayment = async (req, res) => {
       });
 
     } else if (paymentIntent.status === 'canceled') {
-      // Mark order as failed
       order.markPaymentFailed();
       await order.save();
-
       res.status(400).json({
         success: false,
         message: 'Payment was canceled',
