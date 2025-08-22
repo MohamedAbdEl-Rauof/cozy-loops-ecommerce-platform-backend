@@ -5,55 +5,55 @@ const crypto = require('crypto');
  * Create email transporter using Gmail SMTP
  */
 const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASSWORD
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
+    return nodemailer.createTransport({
+        host: process.env.EMAIL_HOST,
+        port: process.env.EMAIL_PORT,
+        secure: false,
+        auth: {
+            user: process.env.EMAIL_USERNAME,
+            pass: process.env.EMAIL_PASSWORD
+        },
+        tls: {
+            rejectUnauthorized: false
+        }
+    });
 };
 
 /**
  * Send email
  */
 const sendEmail = async (options) => {
-  const transporter = createTransporter();
+    const transporter = createTransporter();
 
-  const mailOptions = {
-    from: process.env.EMAIL_FROM,
-    to: options.to,
-    subject: options.subject,
-    html: options.html
-  };
+    const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: options.to,
+        subject: options.subject,
+        html: options.html
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
 };
 
 /**
  * Generate verification token
  */
 const generateVerificationToken = () => {
-  return crypto.randomBytes(32).toString('hex');
+    return crypto.randomBytes(32).toString('hex');
 };
 
 /**
  * Create verification URL
  */
 const createVerificationUrl = (token) => {
-  return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
+    return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
 };
 
 /**
  * Create verification email HTML
  */
 const createVerificationEmailHtml = (firstName, verificationUrl) => {
-  return `
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -171,8 +171,8 @@ const createVerificationEmailHtml = (firstName, verificationUrl) => {
 };
 
 module.exports = {
-  sendEmail,
-  generateVerificationToken,
-  createVerificationUrl,
-  createVerificationEmailHtml
+    sendEmail,
+    generateVerificationToken,
+    createVerificationUrl,
+    createVerificationEmailHtml
 };

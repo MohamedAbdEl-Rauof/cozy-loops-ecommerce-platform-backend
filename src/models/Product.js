@@ -35,7 +35,7 @@ const productSchema = new mongoose.Schema({
   priceBeforeDiscount: {
     type: Number,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !v || v >= this.price;
       },
       message: 'Price before discount must be greater than or equal to current price'
@@ -102,29 +102,27 @@ const productSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create slug before saving
-productSchema.pre('save', function(next) {
+productSchema.pre('save', function (next) {
   if (this.isModified('name')) {
     this.slug = this.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-');
   }
-  
-  // Calculate discount percentage if priceBeforeDiscount is provided
+
   if (this.priceBeforeDiscount && this.priceBeforeDiscount > this.price) {
     this.discountPercentage = Math.round(((this.priceBeforeDiscount - this.price) / this.priceBeforeDiscount) * 100);
   }
-  
+
   next();
 });
 
-productSchema.methods.updateReviewStats = async function() {
+productSchema.methods.updateReviewStats = async function () {
   const Review = mongoose.model('Review');
   const reviews = await Review.find({ product: this._id });
-  
+
   this.numReviews = reviews.length;
-  this.averageRating = reviews.length > 0 
-    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length 
+  this.averageRating = reviews.length > 0
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
     : 0;
-  
+
   await this.save();
 };
 

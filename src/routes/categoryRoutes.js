@@ -5,9 +5,7 @@ const {
   getCategory,
 } = require('../controllers/categoryController');
 
-// Public routes
 router.get('/', getAllCategories);
 router.get('/:id', getCategory);
-
 
 module.exports = router;

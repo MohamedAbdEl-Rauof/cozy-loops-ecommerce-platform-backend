@@ -21,6 +21,4 @@ router.route('/:id')
 
 router.get('/:id/payment', protect, getOrderForPayment);
 
-
-
 module.exports = router;

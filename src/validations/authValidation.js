@@ -26,14 +26,14 @@ const registerValidation = [
     .withMessage('Please provide a valid email')
     .normalizeEmail(),
 
-body('password')
-  .trim()
-  .notEmpty()
-  .withMessage('Password is required')
-  .isLength({ min: 8 })
-  .withMessage('Password must be at least 8 characters')
-  .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_()#^])[A-Za-z\d@$!%*?&_()#^]+$/)
-  .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
+  body('password')
+    .trim()
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_()#^])[A-Za-z\d@$!%*?&_()#^]+$/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
 ];
 
 /**
@@ -74,7 +74,6 @@ const otpVaildation = [
     .isNumeric()
     .withMessage('OTP must be a 6-digit number'),
 ];
-
 
 module.exports = {
   registerValidation,

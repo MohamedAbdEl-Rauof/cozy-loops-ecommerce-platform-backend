@@ -61,7 +61,6 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: function () {
-      // Password is only required if user doesn't have OAuth providers
       return !this.googleId && this.authProvider === 'local';
     },
     minlength: [8, 'Password must be at least 8 characters'],
@@ -123,9 +122,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Hash password before saving (only if password exists)
 userSchema.pre('save', async function (next) {
-  // Skip password hashing if password is not modified or doesn't exist
   if (!this.isModified('password') || !this.password) return next();
 
   try {
@@ -137,14 +134,11 @@ userSchema.pre('save', async function (next) {
   }
 });
 
-// Method to compare entered password with user's hashed password
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  // Return false if user doesn't have a password (OAuth users)
   if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Method to generate password reset token
 userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
 

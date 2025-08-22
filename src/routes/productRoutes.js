@@ -5,10 +5,7 @@ const {
   getProductsByCategory,
 } = require('../controllers/productController');
 
-// Public routes
 router.get('/', getAllProducts);
 router.get('/category/:id', getProductsByCategory);
-
-
 
 module.exports = router;

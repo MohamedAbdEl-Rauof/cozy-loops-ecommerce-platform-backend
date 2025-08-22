@@ -1,7 +1,11 @@
 const { Category, Product } = require('../models');
 const mongoose = require('mongoose');
 
-// Get all categories
+/**
+ * Get all active categories
+ * @route GET /api/categories
+ * @access Public
+ */
 exports.getAllCategories = async (req, res) => {
   try {
     const categories = await Category.find({ isActive: true })
@@ -22,7 +26,11 @@ exports.getAllCategories = async (req, res) => {
   }
 };
 
-// Get category by ID or slug with products
+/**
+ * Get a single category with its subcategories and products
+ * @route GET /api/categories/:id
+ * @access Public
+ */
 exports.getCategory = async (req, res) => {
   try {
     const { id } = req.params;

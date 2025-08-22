@@ -12,7 +12,6 @@ exports.addToCart = async (req, res) => {
     const { productId, quantity = 1, variant = null } = req.body;
     const userId = req.user._id;
 
-    // Validate input
     if (!productId) {
       return res.status(400).json({
         message: 'Product ID is required'
@@ -25,7 +24,6 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    // Get product details
     const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({
@@ -33,20 +31,17 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    // Check if product is available
     if (!product.isActive) {
       return res.status(400).json({
         message: 'Product is not available'
       });
     }
 
-    // Find existing cart (active or processing) or create new active cart
-    let cart = await Cart.findOne({ 
-      user: userId, 
+    let cart = await Cart.findOne({
+      user: userId,
       status: { $in: ['active', 'processing'] }
     }).populate('items.product');
 
-    // If no cart exists or existing cart is not active, create new active cart
     if (!cart || cart.status !== 'active') {
       cart = new Cart({
         user: userId,
@@ -57,13 +52,11 @@ exports.addToCart = async (req, res) => {
       await cart.populate('items.product');
     }
 
-    // Add item to cart
     try {
       await cart.addItem(productId, quantity, product.price, variant);
       await cart.save();
     } catch (error) {
       if (error.message.includes('Cannot modify cart with status')) {
-        // If current cart cannot be modified, create a new one
         cart = new Cart({
           user: userId,
           items: [],
@@ -71,8 +64,6 @@ exports.addToCart = async (req, res) => {
         });
         await cart.save();
         await cart.populate('items.product');
-        
-        // Try adding to the new cart
         await cart.addItem(productId, quantity, product.price, variant);
         await cart.save();
       } else {
@@ -80,10 +71,8 @@ exports.addToCart = async (req, res) => {
       }
     }
 
-    // Populate cart items for response
     await cart.populate('items.product');
 
-    // Emit real-time update
     try {
       const io = getIO();
       io.to(`user_${userId}`).emit('cartUpdated', {
@@ -93,7 +82,6 @@ exports.addToCart = async (req, res) => {
       });
     } catch (socketError) {
       console.error('Socket emission error:', socketError);
-      // Continue without failing the request
     }
 
     res.status(200).json({
@@ -123,14 +111,11 @@ exports.addToCart = async (req, res) => {
 exports.getCart = async (req, res) => {
   try {
     const userId = req.user._id;
-
-    // First, try to find any existing cart (active or processing)
-    let cart = await Cart.findOne({ 
-      user: userId, 
+    let cart = await Cart.findOne({
+      user: userId,
       status: { $in: ['active', 'processing'] }
     }).populate('items.product');
 
-    // If no cart exists, create a new active cart
     if (!cart) {
       cart = new Cart({
         user: userId,
@@ -164,7 +149,6 @@ exports.getCart = async (req, res) => {
   }
 };
 
-
 /**
  * Update item quantity in cart
  * @route PUT /api/cart/update
@@ -175,7 +159,6 @@ exports.updateQuantity = async (req, res) => {
     const { productId, quantity, variant = null } = req.body;
     const userId = req.user._id;
 
-    // Validate input
     if (!productId) {
       return res.status(400).json({
         message: 'Product ID is required'
@@ -188,39 +171,42 @@ exports.updateQuantity = async (req, res) => {
       });
     }
 
-    // Find ACTIVE cart only (this is the key fix)
-    let cart = await Cart.findOne({ user: userId, status: 'active' });
-    
-  
+    let cart = await Cart.findOne({
+      user: userId,
+      status: { $in: ['active', 'processing'] }
+    });
 
     if (!cart) {
       return res.status(404).json({
         success: false,
-        message: 'No active cart found. Please add items to cart first.',
+        message: 'No cart found. Please add items to cart first.',
         suggestion: 'Create a new cart by adding items'
       });
     }
 
-    // Find the specific item in cart with better comparison
+    if (cart.status === 'processing') {
+      cart.status = 'active';
+      cart.orderId = null;
+      await cart.save();
+    }
+
     const itemIndex = cart.items.findIndex(item => {
       const productMatch = item.product.toString() === productId.toString();
       const variantMatch = (item.variant === variant) ||
         (item.variant === null && variant === null) ||
         (item.variant === undefined && variant === null) ||
         (item.variant === null && variant === undefined);
-      
-      
+
       return productMatch && variantMatch;
     });
 
-  
     if (itemIndex === -1) {
       return res.status(404).json({
         success: false,
-        message: 'Item not found in active cart',
+        message: 'Item not found in cart',
         debug: {
           searchingFor: { productId, variant },
-          activeCartItems: cart.items.map(item => ({
+          cartItems: cart.items.map(item => ({
             productId: item.product.toString(),
             variant: item.variant,
             quantity: item.quantity
@@ -236,7 +222,7 @@ exports.updateQuantity = async (req, res) => {
       await cart.save();
       await cart.populate('items.product');
     } catch (error) {
-      console.error('❌ UPDATE QUANTITY ERROR:', error.message);
+      console.error('UPDATE QUANTITY ERROR:', error.message);
       if (error.message.includes('Cannot modify cart with status')) {
         return res.status(400).json({
           success: false,
@@ -248,7 +234,6 @@ exports.updateQuantity = async (req, res) => {
       throw error;
     }
 
-    // Emit real-time update
     try {
       const io = getIO();
       io.to(`user_${userId}`).emit('cartUpdated', {
@@ -258,7 +243,6 @@ exports.updateQuantity = async (req, res) => {
       });
     } catch (socketError) {
       console.error('Socket emission error:', socketError);
-      // Continue without failing the request
     }
 
     res.status(200).json({
@@ -280,7 +264,6 @@ exports.updateQuantity = async (req, res) => {
   }
 };
 
-
 /**
  * Remove item from cart
  * @route DELETE /api/cart/remove
@@ -291,24 +274,31 @@ exports.removeItem = async (req, res) => {
     const { productId, variant = null } = req.body;
     const userId = req.user._id;
 
-    // Validate input
     if (!productId) {
       return res.status(400).json({
         message: 'Product ID is required'
       });
     }
 
-    // Find ACTIVE cart only (key fix here too)
-    let cart = await Cart.findOne({ user: userId, status: 'active' });
+    let cart = await Cart.findOne({
+      user: userId,
+      status: { $in: ['active', 'processing'] }
+    });
+
     if (!cart) {
       return res.status(404).json({
         success: false,
-        message: 'No active cart found',
+        message: 'No cart found',
         suggestion: 'Create a new cart by adding items'
       });
     }
 
-    // Check if item exists in cart with better variant comparison
+    if (cart.status === 'processing') {
+      cart.status = 'active';
+      cart.orderId = null;
+      await cart.save();
+    }
+
     const itemExists = cart.items.some(item => {
       const productMatch = item.product.toString() === productId.toString();
       const variantMatch = (item.variant === variant) ||
@@ -321,10 +311,10 @@ exports.removeItem = async (req, res) => {
     if (!itemExists) {
       return res.status(404).json({
         success: false,
-        message: 'Item not found in active cart',
+        message: 'Item not found in cart',
         debug: {
           searchingFor: { productId, variant },
-          activeCartItems: cart.items.map(item => ({
+          cartItems: cart.items.map(item => ({
             productId: item.product.toString(),
             variant: item.variant
           })),
@@ -333,7 +323,6 @@ exports.removeItem = async (req, res) => {
       });
     }
 
-    // Remove item from cart
     try {
       cart.removeItem(productId, variant);
       await cart.save();
@@ -350,7 +339,6 @@ exports.removeItem = async (req, res) => {
       throw error;
     }
 
-    // Emit real-time update
     try {
       const io = getIO();
       io.to(`user_${userId}`).emit('cartUpdated', {
@@ -360,7 +348,6 @@ exports.removeItem = async (req, res) => {
       });
     } catch (socketError) {
       console.error('Socket emission error:', socketError);
-      // Continue without failing the request
     }
 
     res.status(200).json({
@@ -391,16 +378,18 @@ exports.clearCart = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Find ACTIVE cart only
-    let cart = await Cart.findOne({ user: userId, status: 'active' });
+    let cart = await Cart.findOne({
+      user: userId,
+      status: { $in: ['active', 'processing'] }
+    });
+
     if (!cart) {
       return res.status(404).json({
         success: false,
-        message: 'No active cart found'
+        message: 'No cart found'
       });
     }
 
-    // Check if cart is already empty
     if (cart.items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -408,7 +397,12 @@ exports.clearCart = async (req, res) => {
       });
     }
 
-    // Clear cart
+    if (cart.status === 'processing') {
+      cart.status = 'active';
+      cart.orderId = null;
+      await cart.save();
+    }
+
     try {
       cart.clearCart();
       await cart.save();
@@ -424,7 +418,6 @@ exports.clearCart = async (req, res) => {
       throw error;
     }
 
-    // Emit real-time update
     try {
       const io = getIO();
       io.to(`user_${userId}`).emit('cartUpdated', {
@@ -433,7 +426,74 @@ exports.clearCart = async (req, res) => {
       });
     } catch (socketError) {
       console.error('Socket emission error:', socketError);
-      // Continue without failing the request
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Cart cleared successfully',
+      cart: {
+        items: cart.items,
+        totalItems: cart.totalItems,
+        totalAmount: cart.totalAmount,
+        lastUpdated: cart.lastUpdated
+      }
+    });
+
+  } catch (error) {
+    console.error('Clear cart error:', error);
+    res.status(500).json({
+      message: 'Server error while clearing cart'
+    });
+  }
+};
+
+/**
+ * Clear entire cart
+ * @route DELETE /api/cart/clear
+ * @access Private
+ */
+exports.clearCart = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    let cart = await Cart.findOne({ user: userId, status: 'active' });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: 'No active cart found'
+      });
+    }
+
+    if (cart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cart is already empty'
+      });
+    }
+
+    try {
+      cart.clearCart();
+      await cart.save();
+    } catch (error) {
+      if (error.message.includes('Cannot modify cart with status')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+          cartStatus: cart.status,
+          suggestion: 'Your cart has been processed and cannot be cleared.'
+        });
+      }
+      throw error;
+    }
+
+    try {
+      const io = getIO();
+      io.to(`user_${userId}`).emit('cartUpdated', {
+        cart: cart,
+        action: 'clear'
+      });
+    } catch (socketError) {
+      console.error('Socket emission error:', socketError);
     }
 
     res.status(200).json({
@@ -521,19 +581,27 @@ exports.checkoutCart = async (req, res) => {
     const userId = req.user._id;
     const { shippingCost = 0, shippingAddress = null, orderId = null } = req.body;
 
-    // If orderId is provided, check if order already exists
     if (orderId) {
       const Order = require('../models/Order');
-      const existingOrder = await Order.findOne({ 
-        _id: orderId, 
-        user: userId 
+      const existingOrder = await Order.findOne({
+        _id: orderId,
+        user: userId
       });
 
       if (existingOrder) {
-        // Return existing order data for payment continuation
+        existingOrder.shippingCost = 0;
+        existingOrder.tax = 0;
+        existingOrder.totalAmount = existingOrder.subtotal;
+
+        if (shippingAddress) {
+          existingOrder.shippingAddress = shippingAddress;
+        }
+
+        await existingOrder.save();
+
         return res.status(200).json({
           success: true,
-          message: 'Existing order found',
+          message: 'Existing order found and updated',
           order: {
             _id: existingOrder._id,
             orderNumber: existingOrder.orderNumber,
@@ -551,20 +619,58 @@ exports.checkoutCart = async (req, res) => {
       }
     }
 
-    // Find active cart
-    const cart = await Cart.findOne({ user: userId, status: 'active' })
-      .populate('items.product');
+    const cart = await Cart.findOne({
+      user: userId,
+      status: { $in: ['active', 'processing'] }
+    }).populate('items.product');
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No active cart found or cart is empty'
+        message: 'No cart found or cart is empty'
       });
     }
 
-    // Create Order model
-    const Order = require('../models/Order');
+    if (cart.status === 'processing' && cart.orderId) {
+      const Order = require('../models/Order');
+      const existingOrder = await Order.findById(cart.orderId);
 
+      if (existingOrder) {
+        existingOrder.shippingCost = 0;
+        existingOrder.tax = 0;
+        existingOrder.totalAmount = existingOrder.subtotal;
+
+        if (shippingAddress) {
+          existingOrder.shippingAddress = shippingAddress;
+        }
+
+        await existingOrder.save();
+
+        return res.status(200).json({
+          success: true,
+          message: 'Existing order found and updated for payment retry',
+          order: {
+            _id: existingOrder._id,
+            orderNumber: existingOrder.orderNumber,
+            items: existingOrder.items,
+            subtotal: existingOrder.subtotal,
+            shippingCost: existingOrder.shippingCost,
+            tax: existingOrder.tax,
+            totalAmount: existingOrder.totalAmount,
+            orderStatus: existingOrder.orderStatus,
+            paymentStatus: existingOrder.paymentStatus,
+            paymentIntentId: existingOrder.paymentIntentId,
+            createdAt: existingOrder.createdAt
+          }
+        });
+      } else {
+        cart.status = 'active';
+        cart.orderId = null;
+        await cart.save();
+      }
+    }
+
+    const Order = require('../models/Order');
     const orderItems = cart.items.map(item => ({
       product: item.product._id,
       quantity: item.quantity,
@@ -574,30 +680,26 @@ exports.checkoutCart = async (req, res) => {
     }));
 
     const subtotal = cart.totalAmount;
-    const tax = subtotal * 0.08; // 8% tax
-    const totalAmount = subtotal + shippingCost + tax;
+    const tax = 0;
+    const totalAmount = subtotal;
 
-    // Create order without paymentIntentId initially
     const order = new Order({
       user: userId,
       items: orderItems,
       subtotal: subtotal,
-      shippingCost: shippingCost,
+      shippingCost: 0,
       tax: tax,
       totalAmount: totalAmount,
-      orderStatus: 'pending', // Start as pending, not processing
+      orderStatus: 'pending',
       paymentStatus: 'pending',
       shippingAddress: shippingAddress,
-      paymentIntentId: null // Will be set when payment intent is created
+      paymentIntentId: null
     });
 
     await order.save();
-
-    // Mark cart as processing and link to order
     cart.markAsProcessing(order._id);
     await cart.save();
 
-    // Emit real-time update
     try {
       const io = getIO();
       io.to(`user_${userId}`).emit('cartCheckedOut', {
@@ -606,7 +708,6 @@ exports.checkoutCart = async (req, res) => {
         totalAmount: totalAmount
       });
     } catch (socketError) {
-      console.error('Socket emission error:', socketError);
     }
 
     res.status(200).json({
@@ -617,7 +718,7 @@ exports.checkoutCart = async (req, res) => {
         orderNumber: order.orderNumber,
         items: orderItems,
         subtotal: subtotal,
-        shippingCost: shippingCost,
+        shippingCost: 0,
         tax: tax,
         totalAmount: totalAmount,
         orderStatus: order.orderStatus,
@@ -627,7 +728,6 @@ exports.checkoutCart = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Checkout cart error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error while creating order',

@@ -4,10 +4,12 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const asyncHandler = require('express-async-handler');
 
-// @desc    Create a new review
-// @route   POST /api/reviews
-// @access  Private
-const createReview = asyncHandler(async (req, res) => {
+/**
+ * Create a new review for a product
+ * @route POST /api/reviews
+ * @access Private
+ */
+exports.createReview = asyncHandler(async (req, res) => {
     const { productSlug, comment, rating } = req.body;
     const userId = req.user._id;
 
@@ -39,7 +41,6 @@ const createReview = asyncHandler(async (req, res) => {
         throw new Error('User not found');
     }
 
-    // Create and save the new review
     const review = new Review({
         user: userId,
         product: product._id,
@@ -49,10 +50,7 @@ const createReview = asyncHandler(async (req, res) => {
 
     const savedReview = await review.save();
 
-    // Update product review stats after creating the review
     await product.updateReviewStats();
-
-    // Populate user data for the response
     await savedReview.populate('user', 'firstName lastName Avatar');
 
     res.status(201).json({
@@ -62,15 +60,17 @@ const createReview = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Get all reviews for a product
-// @route   GET /api/reviews/product/:productIdentifier
-// @access  Public
-const getProductReviews = asyncHandler(async (req, res) => {
+/**
+ * Get all reviews for a specific product
+ * @route GET /api/reviews/product/:productIdentifier
+ * @access Public
+ */
+exports.getProductReviews = asyncHandler(async (req, res) => {
     const { productIdentifier } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || '-createdAt';
-    
+
     const { userId } = req.query;
 
     let product;
@@ -110,8 +110,8 @@ const getProductReviews = asyncHandler(async (req, res) => {
 
     const reviewsWithOwnership = reviews.map(review => ({
         ...review.toObject(),
-        isOwner: userId && mongoose.Types.ObjectId.isValid(userId) 
-            ? review.user._id.toString() === userId.toString() 
+        isOwner: userId && mongoose.Types.ObjectId.isValid(userId)
+            ? review.user._id.toString() === userId.toString()
             : false
     }));
 
@@ -127,10 +127,12 @@ const getProductReviews = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Update user's own review
-// @route   PUT /api/reviews/:id
-// @access  Private
-const updateReview = asyncHandler(async (req, res) => {
+/**
+ * Update user's own review
+ * @route PUT /api/reviews/:id
+ * @access Private
+ */
+exports.updateReview = asyncHandler(async (req, res) => {
     const { comment, rating } = req.body;
     const reviewId = req.params.id;
     const userId = req.user._id;
@@ -185,10 +187,13 @@ const updateReview = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Delete user's own review
-// @route   DELETE /api/reviews/:id
-// @access  Private
-const deleteReview = asyncHandler(async (req, res) => {
+/**
+ * Delete user's own review
+ * @route DELETE /api/reviews/:id
+ * @access Private
+ */
+
+exports.deleteReview = asyncHandler(async (req, res) => {
     const reviewId = req.params.id;
     const userId = req.user._id;
 
@@ -216,10 +221,12 @@ const deleteReview = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Like or dislike a review
-// @route   POST /api/reviews/:id/like
-// @access  Private
-const likeDislikeReview = asyncHandler(async (req, res) => {
+/**
+ * Like or dislike a review
+ * @route POST /api/reviews/:id/like
+ * @access Private
+ */
+exports.likeDislikeReview = asyncHandler(async (req, res) => {
     const { type } = req.body;
     const reviewId = req.params.id;
     const userId = req.user._id;
@@ -263,21 +270,19 @@ const likeDislikeReview = asyncHandler(async (req, res) => {
     });
 });
 
-
-// @desc    Get all users' reviews
-// @route   GET /api/reviews/users
-// @access  Public
-const getAllUsersReviews = asyncHandler(async (req, res) => {
+/**
+ * Get all users' reviews with filtering
+ * @route GET /api/reviews/users
+ * @access Public
+ */
+exports.getAllUsersReviews = asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const sort = req.query.sort || '-createdAt';
 
-    // Optional filters
     const { userId, productId, rating } = req.query;
-
     let filter = {};
 
-    // Add filters if provided
     if (userId && mongoose.Types.ObjectId.isValid(userId)) {
         filter.user = userId;
     }
@@ -323,12 +328,3 @@ const getAllUsersReviews = asyncHandler(async (req, res) => {
     });
 });
 
-
-module.exports = {
-    createReview,
-    getProductReviews,
-    updateReview,
-    deleteReview,
-    likeDislikeReview,
-    getAllUsersReviews
-};

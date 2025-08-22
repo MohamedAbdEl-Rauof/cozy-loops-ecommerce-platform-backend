@@ -6,7 +6,7 @@ const validateUpdateReview = [
     .trim()
     .isLength({ min: 2, max: 1000 })
     .withMessage('Comment must be between 2 and 1000 characters'),
-  
+
   body('rating')
     .optional()
     .isInt({ min: 1, max: 5 })

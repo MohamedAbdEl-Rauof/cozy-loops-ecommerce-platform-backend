@@ -60,9 +60,9 @@ exports.addToWishlist = async (req, res) => {
 
   } catch (error) {
     console.error('Add to wishlist error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: error.message || 'Server error while adding item to wishlist' 
+      message: error.message || 'Server error while adding item to wishlist'
     });
   }
 };
@@ -89,9 +89,9 @@ exports.getWishlist = async (req, res) => {
 
   } catch (error) {
     console.error('Get wishlist error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while retrieving wishlist' 
+      message: 'Server error while retrieving wishlist'
     });
   }
 };
@@ -144,9 +144,9 @@ exports.removeFromWishlist = async (req, res) => {
 
   } catch (error) {
     console.error('Remove from wishlist error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Server error while removing item from wishlist' 
+      message: 'Server error while removing item from wishlist'
     });
   }
 };

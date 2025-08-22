@@ -15,13 +15,11 @@ const router = express.Router();
 router.get('/user', getAllUsersReviews);
 router.get('/product/:productIdentifier', getProductReviews);
 
-// Apply protection to ALL routes
 router.use(protect);
 
 router.route('/')
     .post(createReview);
 
-// Parameterized routes come last
 router.route('/:id')
     .put(validateUpdateReview, updateReview)
     .delete(deleteReview);
