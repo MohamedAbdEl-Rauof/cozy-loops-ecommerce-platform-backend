@@ -1,13 +1,16 @@
 const { Product, Category, Maker } = require('../models');
 
-// Get all products with filters
+/**
+ * Get all products with advanced filtering and pagination
+ * @route GET /api/products
+ * @access Public
+ */
 exports.getAllProducts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
-    // Build filter object
     const filter = { isActive: true };
 
     if (req.query.category) {
@@ -36,7 +39,6 @@ exports.getAllProducts = async (req, res) => {
       ];
     }
 
-    // Build sort object
     let sort = {};
     switch (req.query.sort) {
       case 'price_asc':
@@ -87,7 +89,11 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-// Get products by category ID or slug
+/**
+ * Get products by category with filtering and pagination
+ * @route GET /api/products/category/:id
+ * @access Public
+ */
 exports.getProductsByCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,7 +101,6 @@ exports.getProductsByCategory = async (req, res) => {
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
-    // Find category by ID or slug
     const mongoose = require('mongoose');
     let category;
 
@@ -145,7 +150,6 @@ exports.getProductsByCategory = async (req, res) => {
       ];
     }
 
-    // Build sort object
     let sort = {};
     switch (req.query.sort) {
       case 'price_asc':

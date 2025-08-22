@@ -1,11 +1,8 @@
 /**
  * Create OTP email HTML
- * @param {String} firstName - User's first name
- * @param {String} otp - One-time password
- * @returns {String} HTML email content
  */
 exports.createOTPEmailHtml = (firstName, otp) => {
-  return `
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -103,11 +100,9 @@ exports.createOTPEmailHtml = (firstName, otp) => {
 
 /**
  * Create password reset confirmation email HTML
- * @param {String} firstName - User's first name
- * @returns {String} HTML email content
  */
 exports.createPasswordResetConfirmationHtml = (firstName) => {
-  return `
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>

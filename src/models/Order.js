@@ -32,7 +32,7 @@ const orderSchema = new mongoose.Schema({
     orderNumber: {
         type: String,
         unique: true,
-        default: function() {
+        default: function () {
             return 'ORD-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         }
     },
@@ -70,7 +70,7 @@ const orderSchema = new mongoose.Schema({
     },
     paymentIntentId: {
         type: String,
-        required: false, // Make this optional
+        required: false,
         default: null
     },
     shippingAddress: {
@@ -92,30 +92,26 @@ const orderSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Generate order number before saving if not provided
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', function (next) {
     if (!this.orderNumber) {
         this.orderNumber = 'ORD-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
     }
     next();
 });
 
-// Method to update payment intent
-orderSchema.methods.setPaymentIntent = function(paymentIntentId) {
+orderSchema.methods.setPaymentIntent = function (paymentIntentId) {
     this.paymentIntentId = paymentIntentId;
     this.paymentStatus = 'processing';
     return this;
 };
 
-// Method to mark payment as completed
-orderSchema.methods.markPaymentCompleted = function() {
+orderSchema.methods.markPaymentCompleted = function () {
     this.paymentStatus = 'completed';
     this.orderStatus = 'processing';
     return this;
 };
 
-// Method to mark payment as failed
-orderSchema.methods.markPaymentFailed = function() {
+orderSchema.methods.markPaymentFailed = function () {
     this.paymentStatus = 'failed';
     this.orderStatus = 'cancelled';
     return this;

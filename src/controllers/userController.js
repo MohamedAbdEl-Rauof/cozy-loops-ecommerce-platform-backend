@@ -1,7 +1,5 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-
-// Track failed password attempts (in production, use Redis or database)
 const failedAttempts = new Map();
 
 /**
@@ -49,23 +47,19 @@ exports.updateProfile = async (req, res) => {
     const { firstName, lastName, phoneNumber, avatar } = req.body;
     const userId = req.user._id;
 
-    // Check if at least one field is provided for update
     if (!firstName && !lastName && phoneNumber === undefined && !avatar) {
       return res.status(400).json({
         message: 'At least one field (firstName, lastName, phoneNumber, or avatar) must be provided for update'
       });
     }
 
-    // Find user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Track if any changes were made
     let hasChanges = false;
 
-    // Update fields only if they are different from current values
     if (firstName && firstName !== user.firstName) {
       user.firstName = firstName;
       hasChanges = true;
@@ -86,7 +80,6 @@ exports.updateProfile = async (req, res) => {
       hasChanges = true;
     }
 
-    // If no actual changes were made
     if (!hasChanges) {
       return res.status(400).json({
         message: 'No changes detected. The provided values are the same as current values.'
@@ -129,7 +122,6 @@ exports.updatePassword = async (req, res) => {
     const userId = req.user._id;
     const userKey = userId.toString();
 
-    // Validation
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         message: 'Current password and new password are required'
@@ -142,14 +134,11 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    // Check failed attempts
     const attempts = failedAttempts.get(userKey) || { count: 0, lastAttempt: null };
 
-    // If user has 3 or more failed attempts in the last 15 minutes, force logout
     if (attempts.count >= 3 && attempts.lastAttempt &&
       (Date.now() - attempts.lastAttempt) < 15 * 60 * 1000) {
 
-      // Clear refresh token to force re-authentication
       await User.findByIdAndUpdate(userId, { refreshToken: null });
 
       return res.status(401).json({
@@ -158,17 +147,14 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    // Find user with password field
     const user = await User.findById(userId).select('+password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Verify current password
     const isCurrentPasswordValid = await user.matchPassword(currentPassword);
 
     if (!isCurrentPasswordValid) {
-      // Increment failed attempts
       attempts.count += 1;
       attempts.lastAttempt = Date.now();
       failedAttempts.set(userKey, attempts);
@@ -179,10 +165,8 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    // Reset failed attempts on successful password verification
     failedAttempts.delete(userKey);
 
-    // Check if new password is different from current
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
       return res.status(400).json({
@@ -190,7 +174,6 @@ exports.updatePassword = async (req, res) => {
       });
     }
 
-    // Update password
     user.password = newPassword;
     await user.save();
 

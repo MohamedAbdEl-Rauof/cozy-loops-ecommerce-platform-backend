@@ -17,9 +17,9 @@ exports.getOrderByNumber = async (req, res) => {
       });
     }
 
-    const order = await Order.findOne({ 
+    const order = await Order.findOne({
       orderNumber: orderNumber,
-      user: userId 
+      user: userId
     }).populate('items.product', 'name images price');
 
     if (!order) {
@@ -93,9 +93,9 @@ exports.getOrderById = async (req, res) => {
     const { id } = req.params;
     const userId = req.user._id;
 
-    const order = await Order.findOne({ 
+    const order = await Order.findOne({
       _id: id,
-      user: userId 
+      user: userId
     }).populate('items.product', 'name images price');
 
     if (!order) {
@@ -130,9 +130,9 @@ exports.getOrderForPayment = async (req, res) => {
     const { id } = req.params;
     const userId = req.user._id;
 
-    const order = await Order.findOne({ 
+    const order = await Order.findOne({
       _id: id,
-      user: userId 
+      user: userId
     }).populate('items.product', 'name images price');
 
     if (!order) {
@@ -142,7 +142,6 @@ exports.getOrderForPayment = async (req, res) => {
       });
     }
 
-    // Return order with payment-specific information
     res.status(200).json({
       success: true,
       order: {

@@ -70,23 +70,21 @@ const categorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Set level based on parent before saving 
-categorySchema.pre('save', async function(next) {
+categorySchema.pre('save', async function (next) {
   if (this.isModified('name')) {
     this.slug = this.name.toLowerCase().replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-');
   }
-  
+
   if (this.parent) {
     const parentCategory = await this.constructor.findById(this.parent);
     this.level = parentCategory ? parentCategory.level + 1 : 0;
   } else {
     this.level = 0;
   }
-  
+
   next();
 });
 
-// Create indexes for better performance
 categorySchema.index({ slug: 1 });
 categorySchema.index({ parent: 1 });
 categorySchema.index({ name: 1 });

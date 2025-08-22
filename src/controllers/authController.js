@@ -20,7 +20,6 @@ const axios = require('axios');
  */
 exports.register = async (req, res) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -28,7 +27,6 @@ exports.register = async (req, res) => {
 
     const { firstName, lastName, email, password } = req.body;
 
-    // Check for extra fields
     const allowedFields = ['firstName', 'lastName', 'email', 'password'];
     const extraFields = Object.keys(req.body).filter(field => !allowedFields.includes(field));
 
@@ -38,17 +36,14 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Generate verification token
     const verificationToken = generateVerificationToken();
     const verificationExpire = Date.now() + 24 * 60 * 60 * 1000;
 
-    // Create new user
     const user = new User({
       firstName,
       lastName,
@@ -58,17 +53,13 @@ exports.register = async (req, res) => {
       emailVerificationExpire: verificationExpire,
     });
 
-    // Save user to database
     await user.save();
 
-    // Create verification URL
     const verificationUrl = createVerificationUrl(verificationToken);
 
-    // Create email content
     const emailHtml = createVerificationEmailHtml(firstName, verificationUrl);
 
     try {
-      // Send verification email
       await sendEmail({
         to: email,
         subject: 'Verify Your Email - Cozy Loops',
@@ -88,7 +79,6 @@ exports.register = async (req, res) => {
     } catch (emailError) {
       console.error('Email sending error:', emailError);
 
-      // Still create the user but inform about email issue
       res.status(201).json({
         message: 'User registered successfully but there was an issue sending the verification email. Please use the resend verification option.',
         user: {
@@ -117,7 +107,6 @@ exports.verifyEmail = async (req, res) => {
     const { token } = req.params;
     const directLogin = req.query.directLogin === 'true';
 
-    // Find user with matching verification token and not expired
     const user = await User.findOne({
       emailVerificationToken: token,
       emailVerificationExpire: { $gt: Date.now() }
@@ -129,16 +118,13 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
-    // Update user verification status
     user.emailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpire = undefined;
 
     await user.save();
 
-    // If direct login is requested, generate tokens and return them
     if (directLogin) {
-      // Generate tokens
       const accessToken = generateAccessToken({
         id: user._id,
         role: user.role
@@ -148,11 +134,9 @@ exports.verifyEmail = async (req, res) => {
         id: user._id
       });
 
-      // Save refresh token to user
       user.refreshToken = refreshToken;
       await user.save();
 
-      // Return tokens in JSON response instead of redirecting
       return res.status(200).json({
         message: 'Email verified successfully',
         token: accessToken,
@@ -160,7 +144,6 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
-    // If no direct login, redirect to login page
     return res.redirect(`${process.env.USER_FRONTEND_URL}/auth/login?verified=true`);
   } catch (error) {
     console.error('Email verification error:', error);
@@ -181,7 +164,6 @@ exports.resendVerification = async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    // Find user by email
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -192,23 +174,17 @@ exports.resendVerification = async (req, res) => {
       return res.status(400).json({ message: 'Email is already verified' });
     }
 
-    // Generate new verification token
     const verificationToken = generateVerificationToken();
     const verificationExpire = Date.now() + 24 * 60 * 60 * 1000;
 
-    // Update user with new token
     user.emailVerificationToken = verificationToken;
     user.emailVerificationExpire = verificationExpire;
     await user.save();
 
-    // Create verification URL
     const verificationUrl = createVerificationUrl(verificationToken);
-
-    // Create email content
     const emailHtml = createVerificationEmailHtml(user.firstName, verificationUrl);
 
     try {
-      // Send verification email
       await sendEmail({
         to: email,
         subject: 'Verify Your Email - Cozy Loops',
@@ -239,18 +215,15 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check for admin login using environment variables
     if (
       process.env.ADMIN_EMAIL &&
       process.env.ADMIN_PASSWORD &&
       email === process.env.ADMIN_EMAIL &&
       password === process.env.ADMIN_PASSWORD
     ) {
-      // Find or create admin user
       let admin = await User.findOne({ email: process.env.ADMIN_EMAIL });
 
       if (!admin) {
-        // Create admin user if it doesn't exist
         admin = await User.create({
           firstName: 'Admin',
           lastName: 'User',
@@ -260,13 +233,11 @@ exports.login = async (req, res) => {
           emailVerified: true
         });
       } else if (admin.role !== 'admin') {
-        // Ensure user has admin role
         admin.role = 'admin';
         admin.emailVerified = true;
         await admin.save();
       }
 
-      // Generate tokens for admin 
       const accessToken = generateAccessToken({
         id: admin._id.toString(),
         role: admin.role
@@ -276,11 +247,9 @@ exports.login = async (req, res) => {
         id: admin._id.toString()
       });
 
-      // Save refresh token to admin user
       admin.refreshToken = refreshToken;
       await admin.save();
 
-      // Set cookies
       setTokenCookies(res, accessToken, refreshToken);
 
       return res.status(200).json({
@@ -298,10 +267,8 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Regular user login
     const user = await User.findOne({ email }).select('+password');
 
-    // Check if user exists
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -309,7 +276,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if password is correct
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res.status(401).json({
@@ -318,7 +284,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if email is verified
     if (!user.emailVerified) {
       return res.status(403).json({
         success: false,
@@ -328,7 +293,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if user is active
     if (!user.active) {
       return res.status(403).json({
         success: false,
@@ -336,7 +300,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate tokens 
     const accessToken = generateAccessToken({
       id: user._id.toString(),
       role: user.role
@@ -346,14 +309,11 @@ exports.login = async (req, res) => {
       id: user._id.toString()
     });
 
-    // Save refresh token to user
     user.refreshToken = refreshToken;
     await user.save();
 
-    // Set cookies
     setTokenCookies(res, accessToken, refreshToken);
 
-    // Return success response
     return res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -382,7 +342,6 @@ exports.login = async (req, res) => {
  */
 exports.logout = async (req, res) => {
   try {
-    // Clear refresh token in database if user is authenticated
     if (req.user) {
       const user = await User.findById(req.user.id);
       if (user) {
@@ -391,7 +350,6 @@ exports.logout = async (req, res) => {
       }
     }
 
-    // Clear cookies
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
 
@@ -409,7 +367,6 @@ exports.logout = async (req, res) => {
  */
 exports.refreshToken = async (req, res) => {
   try {
-    // Get refresh token from cookie
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
@@ -417,13 +374,11 @@ exports.refreshToken = async (req, res) => {
     }
 
     try {
-      // Verify refresh token
       const decoded = verifyToken(
         refreshToken,
         process.env.JWT_REFRESH_SECRET
       );
 
-      // Find user with matching refresh token
       const user = await User.findOne({
         _id: decoded.id,
         refreshToken: refreshToken
@@ -433,13 +388,11 @@ exports.refreshToken = async (req, res) => {
         return res.status(401).json({ message: 'Invalid refresh token' });
       }
 
-      // Generate new access token
       const accessToken = generateAccessToken({
         id: user._id,
         role: user.role
       });
 
-      // Set new access token cookie
       res.cookie('accessToken', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV,
@@ -474,20 +427,16 @@ exports.forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    // Find user by email
     const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found with this email' });
     }
 
-    // Generate OTP
     const otp = generateOTP();
 
-    // Hash OTP for secure storage
     const hashedOTP = await hashOTP(otp);
 
-    // Set OTP and expiration (10 minutes)
     user.otp = {
       code: hashedOTP,
       expiresAt: Date.now() + 10 * 60 * 1000
@@ -495,11 +444,9 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    // Create email content
     const emailHtml = createOTPEmailHtml(user.firstName, otp);
 
     try {
-      // Send OTP email
       await sendEmail({
         to: email,
         subject: 'Password Reset Code - Cozy Loops',
@@ -512,7 +459,6 @@ exports.forgotPassword = async (req, res) => {
     } catch (emailError) {
       console.error('Email sending error:', emailError);
 
-      // Reset the OTP if email fails
       user.otp = undefined;
       await user.save();
 
@@ -539,35 +485,29 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
 
-    // Find user by email with OTP fields
     const user = await User.findOne({ email }).select('+otp.code +otp.expiresAt');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check if OTP exists and is not expired
     if (!user.otp || !user.otp.code || !user.otp.expiresAt || user.otp.expiresAt < Date.now()) {
       return res.status(400).json({
         message: 'OTP is invalid or expired. Please request a new one.'
       });
     }
 
-    // Verify OTP
     const isOTPValid = await verifyOTP(otp, user.otp.code);
 
     if (!isOTPValid) {
       return res.status(400).json({ message: 'Invalid OTP' });
     }
 
-    // Generate reset token
     const resetToken = generateResetToken();
 
-    // Set reset token and expiration (15 minutes)
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
 
-    // Clear OTP
     user.otp = undefined;
 
     await user.save();
@@ -596,7 +536,6 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password is required' });
     }
 
-    // Find user with matching reset token and not expired
     const user = await User.findOne({
       resetPasswordToken: token,
       resetPasswordExpire: { $gt: Date.now() }
@@ -615,19 +554,13 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // Update password
     user.password = password;
-
-    // Clear reset token fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-
-    // Clear refresh token to invalidate all sessions (optional)
     user.refreshToken = undefined;
 
     await user.save();
 
-    // Send confirmation email
     try {
       const confirmationHtml = createPasswordResetConfirmationHtml(user.firstName);
 
@@ -665,7 +598,6 @@ exports.googleAuth = async (req, res) => {
       });
     }
 
-    // Verify Google token
     let googleUser;
     try {
       googleUser = await verifyGoogleToken(token);
@@ -676,12 +608,10 @@ exports.googleAuth = async (req, res) => {
       });
     }
 
-    // Check if user exists with this Google ID
     let user = await User.findOne({ googleId: googleUser.googleId });
     let isNewUser = false;
 
     if (user) {
-      // User exists with Google ID - login
       if (!user.active) {
         return res.status(403).json({
           success: false,
@@ -689,7 +619,6 @@ exports.googleAuth = async (req, res) => {
         });
       }
 
-      // Update user info if needed
       let updated = false;
       if (user.profilePicture !== googleUser.picture) {
         user.profilePicture = googleUser.picture;
@@ -700,27 +629,23 @@ exports.googleAuth = async (req, res) => {
         await user.save();
       }
     } else {
-      // Check if user exists with same email but different auth method
       const existingUser = await User.findOne({ email: googleUser.email });
 
       if (existingUser) {
-        // Link Google account to existing user
         existingUser.googleId = googleUser.googleId;
         existingUser.profilePicture = googleUser.picture;
-        existingUser.emailVerified = true; // Google emails are verified
+        existingUser.emailVerified = true;
         await existingUser.save();
         user = existingUser;
       } else {
-        // Create new user
         user = new User({
           firstName: googleUser.firstName,
           lastName: googleUser.lastName,
           email: googleUser.email,
           googleId: googleUser.googleId,
           profilePicture: googleUser.picture,
-          emailVerified: true, // Google emails are verified
+          emailVerified: true,
           authProvider: 'google',
-          // No password needed for OAuth users
         });
 
         await user.save();
@@ -728,7 +653,6 @@ exports.googleAuth = async (req, res) => {
       }
     }
 
-    // Generate tokens
     const accessToken = generateAccessToken({
       id: user._id.toString(),
       role: user.role
@@ -738,14 +662,11 @@ exports.googleAuth = async (req, res) => {
       id: user._id.toString()
     });
 
-    // Save refresh token to user
     user.refreshToken = refreshToken;
     await user.save();
 
-    // Set cookies
     setTokenCookies(res, accessToken, refreshToken);
 
-    // Return success response
     return res.status(200).json({
       success: true,
       message: 'Google authentication successful',
@@ -771,8 +692,6 @@ exports.googleAuth = async (req, res) => {
   }
 };
 
-
-
 /**
  * LinkedIn OAuth callback
  * @route POST /api/auth/linkedin/callback
@@ -790,14 +709,7 @@ exports.linkedinCallback = async (req, res) => {
       });
     }
 
-    console.log('LinkedIn OAuth - Processing authorization code:', {
-      codeLength: code.length,
-      state: state,
-      timestamp: new Date().toISOString()
-    });
-
-    // Exchange authorization code for access token
-    const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', 
+    const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken',
       new URLSearchParams({
         grant_type: 'authorization_code',
         code: code,
@@ -810,7 +722,7 @@ exports.linkedinCallback = async (req, res) => {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json'
         },
-        timeout: 15000 // Increased timeout
+        timeout: 15000
       }
     );
 
@@ -825,13 +737,6 @@ exports.linkedinCallback = async (req, res) => {
       });
     }
 
-    console.log('LinkedIn OAuth - Access token obtained successfully:', {
-      tokenType: token_type,
-      expiresIn: expires_in,
-      timestamp: new Date().toISOString()
-    });
-
-    // Get user profile from LinkedIn
     const profileResponse = await axios.get('https://api.linkedin.com/v2/userinfo', {
       headers: {
         'Authorization': `Bearer ${access_token}`,
@@ -842,13 +747,6 @@ exports.linkedinCallback = async (req, res) => {
 
     const linkedinProfile = profileResponse.data;
 
-    console.log('LinkedIn OAuth - Profile data received:', {
-      email: linkedinProfile.email,
-      name: `${linkedinProfile.given_name} ${linkedinProfile.family_name}`,
-      hasProfilePicture: !!linkedinProfile.picture,
-      timestamp: new Date().toISOString()
-    });
-
     if (!linkedinProfile.email) {
       return res.status(400).json({
         success: false,
@@ -857,15 +755,11 @@ exports.linkedinCallback = async (req, res) => {
       });
     }
 
-    // Check if user exists with LinkedIn ID first
     let user = await User.findOne({ linkedinId: linkedinProfile.sub });
     let isNewUser = false;
     let isLinkedAccount = false;
 
     if (user) {
-      // User exists with LinkedIn ID - update profile if needed
-      console.log('LinkedIn OAuth - Existing user found by LinkedIn ID:', user._id);
-      
       if (!user.active) {
         return res.status(403).json({
           success: false,
@@ -874,13 +768,12 @@ exports.linkedinCallback = async (req, res) => {
         });
       }
 
-      // Update profile information
       let updated = false;
       if (user.profilePicture !== linkedinProfile.picture && linkedinProfile.picture) {
         user.profilePicture = linkedinProfile.picture;
         updated = true;
       }
-      
+
       if (!user.emailVerified) {
         user.emailVerified = true;
         updated = true;
@@ -888,16 +781,12 @@ exports.linkedinCallback = async (req, res) => {
 
       if (updated) {
         await user.save();
-        console.log('LinkedIn OAuth - User profile updated');
       }
     } else {
-      // Check if user exists with same email but different auth method
       const existingUser = await User.findOne({ email: linkedinProfile.email });
 
       if (existingUser) {
-        // Link LinkedIn account to existing user
-        console.log('LinkedIn OAuth - Linking LinkedIn to existing user:', existingUser._id);
-        
+
         if (!existingUser.active) {
           return res.status(403).json({
             success: false,
@@ -908,9 +797,8 @@ exports.linkedinCallback = async (req, res) => {
 
         existingUser.linkedinId = linkedinProfile.sub;
         existingUser.profilePicture = linkedinProfile.picture || existingUser.profilePicture;
-        existingUser.emailVerified = true; // LinkedIn emails are verified
-        
-        // Update name if not set or if LinkedIn provides more complete info
+        existingUser.emailVerified = true;
+
         if (!existingUser.firstName && linkedinProfile.given_name) {
           existingUser.firstName = linkedinProfile.given_name;
         }
@@ -922,29 +810,24 @@ exports.linkedinCallback = async (req, res) => {
         user = existingUser;
         isLinkedAccount = true;
       } else {
-        // Create new user
-        console.log('LinkedIn OAuth - Creating new user for email:', linkedinProfile.email);
-        
         user = new User({
           firstName: linkedinProfile.given_name || 'LinkedIn',
           lastName: linkedinProfile.family_name || 'User',
           email: linkedinProfile.email,
           linkedinId: linkedinProfile.sub,
           profilePicture: linkedinProfile.picture,
-          emailVerified: true, // LinkedIn emails are verified
+          emailVerified: true,
           authProvider: 'linkedin',
-          password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12), // Random secure password
+          password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12),
           role: 'user',
           active: true
         });
 
         await user.save();
         isNewUser = true;
-        console.log('LinkedIn OAuth - New user created:', user._id);
       }
     }
 
-    // Generate tokens
     const accessTokenJWT = generateAccessToken({
       id: user._id.toString(),
       role: user.role
@@ -954,27 +837,17 @@ exports.linkedinCallback = async (req, res) => {
       id: user._id.toString()
     });
 
-    // Save refresh token to user
     user.refreshToken = refreshToken;
     user.lastLogin = new Date();
     await user.save();
 
-    // Set cookies
     setTokenCookies(res, accessTokenJWT, refreshToken);
 
-    console.log('LinkedIn OAuth - Authentication successful:', {
-      userId: user._id,
-      isNewUser,
-      isLinkedAccount,
-      timestamp: new Date().toISOString()
-    });
-
-    // Return success response
     return res.status(200).json({
       success: true,
-      message: isNewUser 
-        ? 'LinkedIn account created and authenticated successfully' 
-        : isLinkedAccount 
+      message: isNewUser
+        ? 'LinkedIn account created and authenticated successfully'
+        : isLinkedAccount
           ? 'LinkedIn account linked and authenticated successfully'
           : 'LinkedIn authentication successful',
       user: {
@@ -1001,7 +874,7 @@ exports.linkedinCallback = async (req, res) => {
       url: error.config?.url,
       timestamp: new Date().toISOString()
     });
-    
+
     let errorMessage = 'LinkedIn authentication failed';
     let errorCode = 'LINKEDIN_AUTH_FAILED';
     let statusCode = 500;
@@ -1009,13 +882,6 @@ exports.linkedinCallback = async (req, res) => {
     if (error.response?.data) {
       const linkedinError = error.response.data;
       statusCode = error.response.status;
-
-      console.log('LinkedIn API error details:', {
-        status: error.response.status,
-        data: linkedinError,
-        url: error.config?.url,
-        headers: error.config?.headers
-      });
 
       switch (linkedinError.error) {
         case 'invalid_request':
@@ -1069,7 +935,7 @@ exports.linkedinCallback = async (req, res) => {
       success: false,
       message: errorMessage,
       error: errorCode,
-      ...(process.env.NODE_ENV === 'development' && { 
+      ...(process.env.NODE_ENV === 'development' && {
         debug: {
           originalError: error.message,
           linkedinResponse: error.response?.data
