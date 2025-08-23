@@ -186,13 +186,14 @@ cartSchema.statics.findOrCreateCart = async function (userId) {
     return cart;
 };
 
-cartSchema.methods.markAsCompleted = function () {
-    if (this.status !== 'processing') {
-        throw new Error(`Cannot complete cart with status: ${this.status}`);
+cartSchema.methods.markAsProcessing = function (orderId) {
+    if (this.status !== 'active') {
+        throw new Error(`Cannot mark cart as processing with status: ${this.status}`);
     }
-    this.status = 'completed';
+    this.status = 'processing';
+    this.orderId = orderId;
     return this;
-};
+};  
 
 cartSchema.methods.revertToActive = function () {
     if (this.status === 'processing') {
