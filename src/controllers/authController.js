@@ -13,6 +13,7 @@ const { createOTPEmailHtml, createPasswordResetConfirmationHtml } = require('../
 const { verifyGoogleToken } = require('../utils/googleAuth');
 const axios = require('axios');
 
+
 /**
  * Register a new user
  * @route POST /api/auth/register
@@ -55,45 +56,43 @@ exports.register = async (req, res) => {
 
     await user.save();
 
-    const verificationUrl = createVerificationUrl(verificationToken);
+    // Send response immediately, then send email asynchronously
+    res.status(201).json({
+      message: 'User registered successfully. Please check your email for verification.',
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        emailVerified: user.emailVerified
+      }
+    });
 
-    const emailHtml = createVerificationEmailHtml(firstName, verificationUrl);
+    // Send email asynchronously (don't await)
+    setImmediate(async () => {
+      try {
+        const verificationUrl = createVerificationUrl(verificationToken);
+        const emailHtml = createVerificationEmailHtml(firstName, verificationUrl);
 
-    try {
-      await sendEmail({
-        to: email,
-        subject: 'Verify Your Email - Cozy Loops',
-        html: emailHtml
-      });
+        await sendEmail({
+          to: email,
+          subject: 'Verify Your Email - Cozy Loops',
+          html: emailHtml
+        });
 
-      res.status(201).json({
-        message: 'User registered successfully. Please check your email to verify your account.',
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role
-        }
-      });
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
+        console.log(`✅ Verification email sent to ${email}`);
+      } catch (emailError) {
+        console.error(`❌ Failed to send verification email to ${email}:`, emailError.message);
+        // Optionally, you could implement a retry queue here
+      }
+    });
 
-      res.status(201).json({
-        message: 'User registered successfully but there was an issue sending the verification email. Please use the resend verification option.',
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role
-        },
-        emailError: true
-      });
-    }
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    res.status(500).json({
+      message: 'Server error during registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
