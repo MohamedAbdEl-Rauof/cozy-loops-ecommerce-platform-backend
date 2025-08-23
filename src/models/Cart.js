@@ -193,7 +193,15 @@ cartSchema.methods.markAsProcessing = function (orderId) {
     this.status = 'processing';
     this.orderId = orderId;
     return this;
-};  
+};
+
+cartSchema.methods.markAsCompleted = function () {
+    if (this.status !== 'processing') {
+        throw new Error(`Cannot mark cart as completed with status: ${this.status}`);
+    }
+    this.status = 'completed';
+    return this;
+};
 
 cartSchema.methods.revertToActive = function () {
     if (this.status === 'processing') {

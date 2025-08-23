@@ -13,7 +13,6 @@ const { createOTPEmailHtml, createPasswordResetConfirmationHtml } = require('../
 const { verifyGoogleToken } = require('../utils/googleAuth');
 const axios = require('axios');
 
-
 /**
  * Register a new user
  * @route POST /api/auth/register
@@ -56,7 +55,6 @@ exports.register = async (req, res) => {
 
     await user.save();
 
-    // Send response immediately, then send email asynchronously
     res.status(201).json({
       message: 'User registered successfully. Please check your email for verification.',
       user: {
@@ -68,7 +66,6 @@ exports.register = async (req, res) => {
       }
     });
 
-    // Send email asynchronously (don't await)
     setImmediate(async () => {
       try {
         const verificationUrl = createVerificationUrl(verificationToken);
@@ -79,11 +76,8 @@ exports.register = async (req, res) => {
           subject: 'Verify Your Email - Cozy Loops',
           html: emailHtml
         });
-
-        console.log(`✅ Verification email sent to ${email}`);
       } catch (emailError) {
         console.error(`❌ Failed to send verification email to ${email}:`, emailError.message);
-        // Optionally, you could implement a retry queue here
       }
     });
 
