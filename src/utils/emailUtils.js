@@ -1,4 +1,3 @@
-
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
@@ -11,7 +10,7 @@ const createTransporter = () => {
     return nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
         port: port,
-        secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
+        secure: port === 465,
         auth: {
             user: process.env.EMAIL_USERNAME,
             pass: process.env.EMAIL_PASSWORD
@@ -24,16 +23,12 @@ const createTransporter = () => {
         tls: {
             rejectUnauthorized: false
         },
-        // Add timeout settings
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 5000, // 5 seconds
-        socketTimeout: 30000 // 30 seconds
+        connectionTimeout: 10000, 
+        greetingTimeout: 5000,
+        socketTimeout: 30000 
     });
 };
 
-// ... rest of your code remains the same
-
-// Create a singleton transporter instance
 let transporter = null;
 
 const getTransporter = () => {
@@ -61,34 +56,29 @@ const sendEmail = async (options) => {
                 html: options.html
             };
 
-            // Add timeout wrapper
             const emailPromise = emailTransporter.sendMail(mailOptions);
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Email timeout')), 15000)
             );
 
             await Promise.race([emailPromise, timeoutPromise]);
-            console.log(`✅ Email sent successfully to ${options.to}`);
             return;
 
         } catch (error) {
             lastError = error;
-            console.error(`❌ Email attempt ${attempt} failed:`, error.message);
+            console.error(`Email attempt ${attempt} failed:`, error.message);
             
-            // Reset transporter on connection errors
             if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
                 transporter = null;
             }
             
             if (attempt < maxRetries) {
-                // Wait before retry (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             }
         }
     }
 
-    // If all retries failed, log but don't throw (don't block registration)
-    console.error('❌ All email attempts failed:', lastError.message);
+    console.error('All email attempts failed:', lastError.message);
     throw lastError;
 };
 
