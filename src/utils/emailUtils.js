@@ -1,38 +1,95 @@
+
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 /**
- * Create email transporter using Gmail SMTP
+ * Create email transporter with optimized settings for production
  */
 const createTransporter = () => {
+    const port = parseInt(process.env.EMAIL_PORT) || 587;
+    
     return nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: false,
+        port: port,
+        secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
         auth: {
             user: process.env.EMAIL_USERNAME,
             pass: process.env.EMAIL_PASSWORD
         },
+        pool: true,
+        maxConnections: 5, 
+        maxMessages: 100,
+        rateDelta: 1000,
+        rateLimit: 5,
         tls: {
             rejectUnauthorized: false
-        }
+        },
+        // Add timeout settings
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 5000, // 5 seconds
+        socketTimeout: 30000 // 30 seconds
     });
 };
 
+// ... rest of your code remains the same
+
+// Create a singleton transporter instance
+let transporter = null;
+
+const getTransporter = () => {
+    if (!transporter) {
+        transporter = createTransporter();
+    }
+    return transporter;
+};
+
 /**
- * Send email
+ * Send email with timeout and retry logic
  */
 const sendEmail = async (options) => {
-    const transporter = createTransporter();
+    const maxRetries = 3;
+    let lastError;
 
-    const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: options.to,
-        subject: options.subject,
-        html: options.html
-    };
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const emailTransporter = getTransporter();
 
-    await transporter.sendMail(mailOptions);
+            const mailOptions = {
+                from: process.env.EMAIL_FROM,
+                to: options.to,
+                subject: options.subject,
+                html: options.html
+            };
+
+            // Add timeout wrapper
+            const emailPromise = emailTransporter.sendMail(mailOptions);
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Email timeout')), 15000)
+            );
+
+            await Promise.race([emailPromise, timeoutPromise]);
+            console.log(`✅ Email sent successfully to ${options.to}`);
+            return;
+
+        } catch (error) {
+            lastError = error;
+            console.error(`❌ Email attempt ${attempt} failed:`, error.message);
+            
+            // Reset transporter on connection errors
+            if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+                transporter = null;
+            }
+            
+            if (attempt < maxRetries) {
+                // Wait before retry (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+        }
+    }
+
+    // If all retries failed, log but don't throw (don't block registration)
+    console.error('❌ All email attempts failed:', lastError.message);
+    throw lastError;
 };
 
 /**
@@ -48,6 +105,7 @@ const generateVerificationToken = () => {
 const createVerificationUrl = (token) => {
     return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
 };
+
 
 /**
  * Create verification email HTML

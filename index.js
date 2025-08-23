@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./src/config/database');
 const { initSocket } = require('./src/sockets/cartSocket');
+const { requestTimeout } = require('./src/middleware/timeoutMiddleware');
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(requestTimeout(30000));
 
 app.use(cors({
   origin: process.env.FRONTEND_URL,
@@ -44,7 +46,7 @@ const wishlistRoutes = require('./src/routes/wishlistRoutes');
 const paymentRoutes = require('./src/routes/stripePayment');
 const orderRoutes = require('./src/routes/orderRoutes');
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', requestTimeout(45000), authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
@@ -58,14 +60,7 @@ app.use('/api/orders', orderRoutes);
 app.get('/', (req, res) => {
   res.json({
     message: 'Cozy Loops E-commerce API',
-    version: '1.0.0',
-    endpoints: {
-      auth: '/api/auth',
-      users: '/api/users',
-      categories: '/api/categories',
-      products: '/api/products',
-      makers: '/api/makers'
-    }
+    version: '1.0.0'
   });
 });
 

@@ -122,11 +122,21 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ emailVerificationToken: 1 });
+userSchema.index({ resetPasswordToken: 1 });
+userSchema.index({ googleId: 1 }, { sparse: true });
+userSchema.index({ linkedinId: 1 }, { sparse: true });
+userSchema.index({ createdAt: 1 });
+userSchema.index({ emailVerified: 1, active: 1 });
+
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password') || !this.password) return next();
 
   try {
-    const salt = await bcrypt.genSalt(10);
+    // Use lower salt rounds in production for better performance
+    const saltRounds = process.env.NODE_ENV === 'production' ? 10 : 12;
+    const salt = await bcrypt.genSalt(saltRounds);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
