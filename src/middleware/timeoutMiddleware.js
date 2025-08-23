@@ -1,4 +1,3 @@
-
 /**
  * Request timeout middleware
  */
