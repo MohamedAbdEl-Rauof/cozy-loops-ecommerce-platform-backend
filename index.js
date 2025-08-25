@@ -34,6 +34,45 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const userAgent = req.get('User-Agent') || 'Unknown';
+  const ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'Unknown';
+  const contentType = req.get('Content-Type') || 'Not specified';
+  
+  console.log('\n=== Incoming Request ===');
+  console.log(`🕐 Timestamp: ${timestamp}`);
+  console.log(`📍 Method: ${req.method}`);
+  console.log(`🔗 URL: ${req.originalUrl}`);
+  console.log(`🌐 IP Address: ${ip}`);
+  console.log(`📱 User Agent: ${userAgent}`);
+  console.log(`📋 Content-Type: ${contentType}`);
+  
+  // Log query parameters if they exist
+  if (Object.keys(req.query).length > 0) {
+    console.log(`❓ Query Params:`, req.query);
+  }
+  
+  // Log request body for POST/PUT/PATCH requests (excluding sensitive data)
+  if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+    const bodyToLog = { ...req.body };
+    // Hide sensitive fields
+    if (bodyToLog.password) bodyToLog.password = '[HIDDEN]';
+    if (bodyToLog.confirmPassword) bodyToLog.confirmPassword = '[HIDDEN]';
+    if (bodyToLog.token) bodyToLog.token = '[HIDDEN]';
+    console.log(`📦 Request Body:`, bodyToLog);
+  }
+  
+  // Log headers (excluding sensitive ones)
+  const headersToLog = { ...req.headers };
+  if (headersToLog.authorization) headersToLog.authorization = '[HIDDEN]';
+  if (headersToLog.cookie) headersToLog.cookie = '[HIDDEN]';
+  
+  console.log('========================\n');
+  
+  next();
+});
+
 const authRoutes = require('./src/routes/authRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const categoryRoutes = require('./src/routes/categoryRoutes');
