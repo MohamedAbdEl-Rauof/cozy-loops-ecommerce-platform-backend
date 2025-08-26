@@ -165,6 +165,7 @@ const sendEmail = async (options) => {
     throw new Error('Unable to connect to email service. Please try again later.');
   } else {
     throw new Error(`Email delivery failed: ${lastError.message}`);
+    
   }
 };
 
