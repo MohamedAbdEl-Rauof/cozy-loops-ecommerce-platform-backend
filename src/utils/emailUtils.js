@@ -5,103 +5,143 @@ const crypto = require('crypto');
  * Create email transporter with optimized settings for production
  */
 const createTransporter = () => {
-    const port = parseInt(process.env.EMAIL_PORT) || 587;
-    
-    return nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: port,
-        secure: port === 465,
-        auth: {
-            user: process.env.EMAIL_USERNAME,
-            pass: process.env.EMAIL_PASSWORD
-        },
-        pool: true,
-        maxConnections: 5, 
-        maxMessages: 100,
-        rateDelta: 1000,
-        rateLimit: 5,
-        tls: {
-            rejectUnauthorized: false
-        },
-        connectionTimeout: 10000, 
-        greetingTimeout: 5000,
-        socketTimeout: 30000 
-    });
+  const port = parseInt(process.env.EMAIL_PORT) || 587;
+
+  // Debug: Log the actual port being used
+  console.log('📧 Email Config Debug:', {
+    EMAIL_PORT_ENV: process.env.EMAIL_PORT,
+    parsed_port: port,
+    secure_setting: port === 465,
+    host: process.env.EMAIL_HOST,
+  });
+
+  const config = {
+    host: process.env.EMAIL_HOST,
+    port: port,
+    secure: port === 465, // true for 465, false for other ports like 587
+    auth: {
+      user: process.env.EMAIL_USERNAME,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+    // For production (serverless), these settings are better:
+    pool: false, // Change back to false for serverless
+    maxConnections: 1,
+    maxMessages: 1,
+    tls: {
+      rejectUnauthorized: false,
+    },
+    connectionTimeout: 30000, // Increased for production
+    greetingTimeout: 15000,
+    socketTimeout: 45000,
+  };
+
+  console.log('📧 Transporter config:', {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    pool: config.pool,
+  });
+
+  return nodemailer.createTransport(config);
 };
 
 let transporter = null;
 
 const getTransporter = () => {
-    if (!transporter) {
-        transporter = createTransporter();
-    }
-    return transporter;
+  if (!transporter) {
+    transporter = createTransporter();
+  }
+  return transporter;
 };
 
 /**
  * Send email with timeout and retry logic
  */
 const sendEmail = async (options) => {
-    const maxRetries = 3;
-    let lastError;
+  const maxRetries = 3;
+  let lastError;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const emailTransporter = getTransporter();
+  console.log(`📧 Attempting to send email to: ${options.to}`);
+  console.log(`📧 Subject: ${options.subject}`);
 
-            const mailOptions = {
-                from: process.env.EMAIL_FROM,
-                to: options.to,
-                subject: options.subject,
-                html: options.html
-            };
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
+      const emailTransporter = getTransporter();
 
-            const emailPromise = emailTransporter.sendMail(mailOptions);
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Email timeout')), 15000)
-            );
+      const mailOptions = {
+        from: process.env.EMAIL_FROM,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+      };
 
-            await Promise.race([emailPromise, timeoutPromise]);
-            return;
+      console.log(`📧 Mail options:`, {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+      });
 
-        } catch (error) {
-            lastError = error;
-            console.error(`Email attempt ${attempt} failed:`, error.message);
-            
-            if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
-                transporter = null;
-            }
-            
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-            }
-        }
+      const emailPromise = emailTransporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000)
+      );
+
+      const result = await Promise.race([emailPromise, timeoutPromise]);
+
+      console.log(`✅ Email sent successfully!`);
+      console.log(`📧 Message ID: ${result.messageId}`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, error.message);
+
+      // More detailed error logging
+      if (error.code) {
+        console.error(`📧 Error code: ${error.code}`);
+      }
+      if (error.response) {
+        console.error(`📧 SMTP response: ${error.response}`);
+      }
+      if (error.responseCode) {
+        console.error(`📧 Response code: ${error.responseCode}`);
+      }
+
+      if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+        transporter = null;
+      }
+
+      if (attempt < maxRetries) {
+        const delay = 2000 * attempt;
+        console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
+  }
 
-    console.error('All email attempts failed:', lastError.message);
-    throw lastError;
+  console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, lastError.message);
+  throw lastError;
 };
 
 /**
  * Generate verification token
  */
 const generateVerificationToken = () => {
-    return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(32).toString('hex');
 };
 
 /**
  * Create verification URL
  */
 const createVerificationUrl = (token) => {
-    return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
+  return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
 };
-
 
 /**
  * Create verification email HTML
  */
 const createVerificationEmailHtml = (firstName, verificationUrl) => {
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -219,8 +259,8 @@ const createVerificationEmailHtml = (firstName, verificationUrl) => {
 };
 
 module.exports = {
-    sendEmail,
-    generateVerificationToken,
-    createVerificationUrl,
-    createVerificationEmailHtml
+  sendEmail,
+  generateVerificationToken,
+  createVerificationUrl,
+  createVerificationEmailHtml,
 };
