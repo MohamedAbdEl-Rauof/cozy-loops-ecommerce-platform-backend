@@ -2,72 +2,83 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 /**
- * Create email transporter with optimized settings for production
+ * Create email transporter optimized for both local and production
  */
 const createTransporter = () => {
   const port = parseInt(process.env.EMAIL_PORT) || 587;
+  const isSecure = process.env.EMAIL_SECURE === 'true';
 
-  // Debug: Log the actual port being used
-  console.log('📧 Email Config Debug:', {
-    EMAIL_PORT_ENV: process.env.EMAIL_PORT,
-    parsed_port: port,
-    secure_setting: port === 465,
-    host: process.env.EMAIL_HOST,
-  });
-
-  const config = {
+  console.log('📧 Email Config:', {
     host: process.env.EMAIL_HOST,
     port: port,
-    secure: port === 465, // true for 465, false for other ports like 587
+    secure: isSecure,
+    env: process.env.NODE_ENV,
+    // Remove this in production for security
+    // EMAIL_SECURE_ENV: process.env.EMAIL_SECURE,
+  });
+
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: port,
+    secure: isSecure,
     auth: {
       user: process.env.EMAIL_USERNAME,
       pass: process.env.EMAIL_PASSWORD,
     },
-    // For production (serverless), these settings are better:
-    pool: false, // Change back to false for serverless
+    pool: false,
     maxConnections: 1,
     maxMessages: 1,
     tls: {
       rejectUnauthorized: false,
     },
-    connectionTimeout: 30000, // Increased for production
-    greetingTimeout: 15000,
-    socketTimeout: 45000,
-  };
-
-  console.log('📧 Transporter config:', {
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    pool: config.pool,
+    connectionTimeout: 60000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
+    // Only enable debug in development
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development',
   });
-
-  return nodemailer.createTransport(config);
-};
-
-let transporter = null;
-
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = createTransporter();
-  }
-  return transporter;
 };
 
 /**
- * Send email with timeout and retry logic
+ * Send email with proper error handling and cleanup - accepts any email
  */
 const sendEmail = async (options) => {
   const maxRetries = 3;
   let lastError;
 
-  console.log(`📧 Attempting to send email to: ${options.to}`);
-  console.log(`📧 Subject: ${options.subject}`);
+  // Only log detailed info in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`📧 Attempting to send email to: ${options.to}`);
+    console.log(`📧 Subject: ${options.subject}`);
+  }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let transporter = null;
+
     try {
-      console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
-      const emailTransporter = getTransporter();
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
+      }
+
+      transporter = createTransporter();
+
+      // Verify transporter on first attempt only
+      if (attempt === 1) {
+        try {
+          await transporter.verify();
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✅ Email transporter verified successfully');
+          }
+        } catch (verifyError) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(
+              '⚠️ Transporter verification failed, but continuing:',
+              verifyError.message
+            );
+          }
+        }
+      }
 
       const mailOptions = {
         from: process.env.EMAIL_FROM,
@@ -76,51 +87,85 @@ const sendEmail = async (options) => {
         html: options.html,
       };
 
-      console.log(`📧 Mail options:`, {
-        from: mailOptions.from,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📧 Mail options:`, {
+          from: mailOptions.from,
+          to: mailOptions.to,
+          subject: mailOptions.subject,
+        });
+      }
 
-      const emailPromise = emailTransporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Email timeout after 30 seconds')), 30000)
-      );
+      const result = await Promise.race([
+        transporter.sendMail(mailOptions),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Email timeout after 60 seconds')), 60000)
+        ),
+      ]);
 
-      const result = await Promise.race([emailPromise, timeoutPromise]);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ Email sent successfully!`);
+        console.log(`📧 Message ID: ${result.messageId}`);
+      }
 
-      console.log(`✅ Email sent successfully!`);
-      console.log(`📧 Message ID: ${result.messageId}`);
+      if (transporter) {
+        transporter.close();
+      }
+
       return result;
     } catch (error) {
       lastError = error;
-      console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, error.message);
 
-      // More detailed error logging
-      if (error.code) {
-        console.error(`📧 Error code: ${error.code}`);
-      }
-      if (error.response) {
-        console.error(`📧 SMTP response: ${error.response}`);
-      }
-      if (error.responseCode) {
-        console.error(`📧 Response code: ${error.responseCode}`);
+      // Log errors differently based on environment
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
+          message: error.message,
+          code: error.code,
+          command: error.command,
+          response: error.response?.substring(0, 200),
+        });
+      } else {
+        // In production, log less detailed errors
+        console.error(`Email attempt ${attempt}/${maxRetries} failed:`, error.message);
       }
 
-      if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
-        transporter = null;
+      if (transporter) {
+        try {
+          transporter.close();
+        } catch (closeError) {
+          // Silent cleanup in production
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Error closing transporter:', closeError.message);
+          }
+        }
       }
 
       if (attempt < maxRetries) {
-        const delay = 2000 * attempt;
-        console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
+        const delay = Math.min(3000 * attempt, 10000);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
+        }
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
-  console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, lastError.message);
-  throw lastError;
+  // Production-safe error logging
+  if (process.env.NODE_ENV === 'development') {
+    console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, lastError.message);
+  } else {
+    console.error(`Email delivery failed after ${maxRetries} attempts:`, lastError.message);
+  }
+
+  // Return user-friendly error messages
+  if (lastError.message?.includes('timeout')) {
+    throw new Error('Email service is currently slow. Please try again later.');
+  } else if (lastError.code === 'EAUTH') {
+    throw new Error('Email authentication failed. Please contact support.');
+  } else if (lastError.code === 'ECONNECTION') {
+    throw new Error('Unable to connect to email service. Please try again later.');
+  } else {
+    throw new Error(`Email delivery failed: ${lastError.message}`);
+  }
 };
 
 /**
