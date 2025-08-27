@@ -25,6 +25,9 @@ const createTransporter = () => {
       secure: isSecure,
       hasUsername: !!process.env.EMAIL_USERNAME,
       hasPassword: !!process.env.EMAIL_PASSWORD,
+      emailFrom: process.env.EMAIL_FROM || 'NOT SET',
+      nodeEnv: process.env.NODE_ENV,
+      userAgent: 'Railway-Hosted-App'
     });
   }
 
@@ -56,7 +59,7 @@ const createTransporter = () => {
     logger: process.env.NODE_ENV === 'development',
   };
 
-  // Gmail-specific settings for better reliability
+  // Service-specific settings for better reliability
   if (process.env.EMAIL_HOST === 'smtp.gmail.com') {
     transportConfig.service = 'gmail';
     // Override with Gmail-optimized settings
@@ -66,6 +69,15 @@ const createTransporter = () => {
     // Remove custom port/secure when using service
     delete transportConfig.port;
     delete transportConfig.secure;
+  } else if (process.env.EMAIL_HOST === 'smtp.sendgrid.net') {
+    // SendGrid configuration (better for Railway)
+    transportConfig.host = 'smtp.sendgrid.net';
+    transportConfig.port = 587;
+    transportConfig.secure = false;
+    transportConfig.auth = {
+      user: 'apikey', // Always 'apikey' for SendGrid
+      pass: process.env.SENDGRID_API_KEY || process.env.EMAIL_PASSWORD
+    };
   }
 
   return nodemailer.createTransport(transportConfig);
