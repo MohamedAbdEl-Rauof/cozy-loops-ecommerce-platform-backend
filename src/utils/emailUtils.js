@@ -6,38 +6,69 @@ const crypto = require('crypto');
  */
 const createTransporter = () => {
   const port = parseInt(process.env.EMAIL_PORT) || 587;
-  const isSecure = process.env.EMAIL_SECURE === 'true';
+  // Fix: Handle string 'false' in production environment
+  const isSecure = process.env.EMAIL_SECURE === 'true' || process.env.EMAIL_SECURE === true;
+  
+  // Production-safe logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📧 Email Config:', {
+      host: process.env.EMAIL_HOST,
+      port: port,
+      secure: isSecure,
+      env: process.env.NODE_ENV,
+      username: process.env.EMAIL_USERNAME ? '***@' + process.env.EMAIL_USERNAME.split('@')[1] : 'NOT SET',
+    });
+  } else {
+    console.log('📧 Email Config (Production):', {
+      host: process.env.EMAIL_HOST || 'NOT SET',
+      port: port,
+      secure: isSecure,
+      hasUsername: !!process.env.EMAIL_USERNAME,
+      hasPassword: !!process.env.EMAIL_PASSWORD,
+    });
+  }
 
-  console.log('📧 Email Config:', {
+  // Enhanced configuration for production
+  const transportConfig = {
     host: process.env.EMAIL_HOST,
     port: port,
-    secure: isSecure,
-    env: process.env.NODE_ENV,
-    // Remove this in production for security
-    // EMAIL_SECURE_ENV: process.env.EMAIL_SECURE,
-  });
-
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: port,
-    secure: isSecure,
+    secure: isSecure, // true for 465 (SSL), false for 587 (TLS)
     auth: {
       user: process.env.EMAIL_USERNAME,
       pass: process.env.EMAIL_PASSWORD,
     },
-    pool: false,
-    maxConnections: 1,
-    maxMessages: 1,
+    // Production optimizations
+    pool: process.env.NODE_ENV === 'production',
+    maxConnections: process.env.NODE_ENV === 'production' ? 5 : 1,
+    maxMessages: process.env.NODE_ENV === 'production' ? 100 : 1,
     tls: {
-      rejectUnauthorized: false,
+      // More secure for production but flexible for Gmail
+      rejectUnauthorized: false, // Gmail often requires this
+      // Gmail-specific TLS settings
+      secureProtocol: 'TLSv1_2_method',
     },
-    connectionTimeout: 60000,
-    greetingTimeout: 30000,
-    socketTimeout: 60000,
+    // Increased timeouts for production networks
+    connectionTimeout: process.env.NODE_ENV === 'production' ? 120000 : 60000,
+    greetingTimeout: process.env.NODE_ENV === 'production' ? 60000 : 30000,
+    socketTimeout: process.env.NODE_ENV === 'production' ? 120000 : 60000,
     // Only enable debug in development
     debug: process.env.NODE_ENV === 'development',
     logger: process.env.NODE_ENV === 'development',
-  });
+  };
+
+  // Gmail-specific settings for better reliability
+  if (process.env.EMAIL_HOST === 'smtp.gmail.com') {
+    transportConfig.service = 'gmail';
+    // Override with Gmail-optimized settings
+    transportConfig.tls = {
+      rejectUnauthorized: false, // Gmail often needs this
+    };
+    // Remove custom port/secure when using service
+    delete transportConfig.port;
+    delete transportConfig.secure;
+  }
+
+  return nodemailer.createTransport(transportConfig);
 };
 
 /**
@@ -51,13 +82,15 @@ const sendEmail = async (options) => {
   if (process.env.NODE_ENV === 'development') {
     console.log(`📧 Attempting to send email to: ${options.to}`);
     console.log(`📧 Subject: ${options.subject}`);
+  } else {
+    console.log(`📧 Sending email to: ${options.to?.substring(0, 3)}***`);
   }
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let transporter = null;
 
     try {
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV !== 'production' || attempt === 1) {
         console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
       }
 
@@ -69,13 +102,23 @@ const sendEmail = async (options) => {
           await transporter.verify();
           if (process.env.NODE_ENV === 'development') {
             console.log('✅ Email transporter verified successfully');
+          } else {
+            console.log('✅ Email transporter connected');
           }
         } catch (verifyError) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn(
-              '⚠️ Transporter verification failed, but continuing:',
-              verifyError.message
-            );
+          const errorMsg = process.env.NODE_ENV === 'development' 
+            ? verifyError.message 
+            : 'Connection verification failed';
+          console.warn('⚠️ Transporter verification failed, but continuing:', errorMsg);
+          
+          // Log additional details in production for debugging
+          if (process.env.NODE_ENV === 'production') {
+            console.log('📧 Connection details:', {
+              host: process.env.EMAIL_HOST,
+              port: process.env.EMAIL_PORT,
+              secure: process.env.EMAIL_SECURE,
+              error: verifyError.code || 'UNKNOWN',
+            });
           }
         }
       }
@@ -102,9 +145,12 @@ const sendEmail = async (options) => {
         ),
       ]);
 
+
       if (process.env.NODE_ENV === 'development') {
         console.log(`✅ Email sent successfully!`);
         console.log(`📧 Message ID: ${result.messageId}`);
+      } else {
+        console.log(`✅ Email sent successfully to ${options.to?.substring(0, 3)}***`);
       }
 
       if (transporter) {
@@ -115,7 +161,7 @@ const sendEmail = async (options) => {
     } catch (error) {
       lastError = error;
 
-      // Log errors differently based on environment
+      // Enhanced error logging for production debugging
       if (process.env.NODE_ENV === 'development') {
         console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
           message: error.message,
@@ -124,8 +170,14 @@ const sendEmail = async (options) => {
           response: error.response?.substring(0, 200),
         });
       } else {
-        // In production, log less detailed errors
-        console.error(`Email attempt ${attempt}/${maxRetries} failed:`, error.message);
+        // More detailed production logging for email issues
+        console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
+          message: error.message,
+          code: error.code,
+          command: error.command,
+          responseCode: error.responseCode,
+          to: options.to?.substring(0, 3) + '***',
+        });
       }
 
       if (transporter) {
@@ -143,29 +195,38 @@ const sendEmail = async (options) => {
         const delay = Math.min(3000 * attempt, 10000);
         if (process.env.NODE_ENV === 'development') {
           console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
+        } else {
+          console.log(`🔄 Retrying email delivery (${delay / 1000}s)...`);
         }
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
 
+  // Enhanced error messages based on common issues
+  const errorMessage = lastError.message?.toLowerCase() || '';
+  
   // Production-safe error logging
-  if (process.env.NODE_ENV === 'development') {
-    console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, lastError.message);
-  } else {
-    console.error(`Email delivery failed after ${maxRetries} attempts:`, lastError.message);
-  }
+  console.error(`💥 All ${maxRetries} email attempts failed. Error details:`, {
+    message: lastError.message,
+    code: lastError.code,
+    responseCode: lastError.responseCode,
+    command: lastError.command,
+  });
 
   // Return user-friendly error messages
-  if (lastError.message?.includes('timeout')) {
+  if (errorMessage.includes('timeout')) {
     throw new Error('Email service is currently slow. Please try again later.');
-  } else if (lastError.code === 'EAUTH') {
-    throw new Error('Email authentication failed. Please contact support.');
-  } else if (lastError.code === 'ECONNECTION') {
+  } else if (lastError.code === 'EAUTH' || errorMessage.includes('authentication failed')) {
+    throw new Error('Email authentication failed. Please check email configuration.');
+  } else if (lastError.code === 'ECONNECTION' || errorMessage.includes('connection')) {
     throw new Error('Unable to connect to email service. Please try again later.');
+  } else if (lastError.responseCode === 535 || errorMessage.includes('invalid credentials')) {
+    throw new Error('Invalid email credentials. Please verify email settings.');
+  } else if (lastError.responseCode === 554 || errorMessage.includes('rejected')) {
+    throw new Error('Email rejected by server. Please check recipient address.');
   } else {
     throw new Error(`Email delivery failed: ${lastError.message}`);
-    
   }
 };
 
