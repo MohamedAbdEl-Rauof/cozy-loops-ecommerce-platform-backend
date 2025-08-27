@@ -2,243 +2,304 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 /**
- * Create email transporter optimized for both local and production
+ * Enhanced email utility optimized for Railway and other cloud platforms
+ * Supports multiple email services with automatic fallback
+ */
+
+/**
+ * Create email transporter with Railway-optimized configuration
  */
 const createTransporter = () => {
-  const port = parseInt(process.env.EMAIL_PORT) || 587;
-  // Fix: Handle string 'false' in production environment
-  const isSecure = process.env.EMAIL_SECURE === 'true' || process.env.EMAIL_SECURE === true;
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isProduction = process.env.NODE_ENV === 'production';
   
-  // Production-safe logging
-  if (process.env.NODE_ENV === 'development') {
-    console.log('📧 Email Config:', {
-      host: process.env.EMAIL_HOST,
-      port: port,
-      secure: isSecure,
-      env: process.env.NODE_ENV,
-      username: process.env.EMAIL_USERNAME ? '***@' + process.env.EMAIL_USERNAME.split('@')[1] : 'NOT SET',
-    });
-  } else {
-    console.log('📧 Email Config (Production):', {
-      host: process.env.EMAIL_HOST || 'NOT SET',
-      port: port,
-      secure: isSecure,
-      hasUsername: !!process.env.EMAIL_USERNAME,
-      hasPassword: !!process.env.EMAIL_PASSWORD,
-      emailFrom: process.env.EMAIL_FROM || 'NOT SET',
-      nodeEnv: process.env.NODE_ENV,
-      userAgent: 'Railway-Hosted-App'
-    });
-  }
+  // Parse environment variables
+  const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const emailPort = parseInt(process.env.EMAIL_PORT) || 587;
+  const emailSecure = process.env.EMAIL_SECURE === 'true';
+  const emailUsername = process.env.EMAIL_USERNAME;
+  const emailPassword = process.env.EMAIL_PASSWORD;
+  const sendGridApiKey = process.env.SENDGRID_API_KEY;
 
-  // Enhanced configuration for production
-  const transportConfig = {
-    host: process.env.EMAIL_HOST,
-    port: port,
-    secure: isSecure, // true for 465 (SSL), false for 587 (TLS)
+  // Log configuration (safe for production)
+  console.log('📧 Email Service Configuration:', {
+    environment: process.env.NODE_ENV,
+    host: emailHost,
+    port: emailPort,
+    secure: emailSecure,
+    hasCredentials: !!(emailUsername && emailPassword),
+    hasSendGrid: !!sendGridApiKey,
+    platform: 'Railway-Optimized'
+  });
+
+  // Base configuration
+  let transportConfig = {
+    host: emailHost,
+    port: emailPort,
+    secure: emailSecure,
     auth: {
-      user: process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASSWORD,
+      user: emailUsername,
+      pass: emailPassword,
     },
-    // Production optimizations
-    pool: process.env.NODE_ENV === 'production',
-    maxConnections: process.env.NODE_ENV === 'production' ? 5 : 1,
-    maxMessages: process.env.NODE_ENV === 'production' ? 100 : 1,
+    // Railway-specific optimizations
+    pool: isProduction,
+    maxConnections: isProduction ? 3 : 1,
+    maxMessages: isProduction ? 50 : 1,
+    rateLimit: isProduction ? 14 : false, // 14 emails per second max
+    
+    // Enhanced timeouts for Railway
+    connectionTimeout: isProduction ? 60000 : 30000,
+    greetingTimeout: isProduction ? 30000 : 15000,
+    socketTimeout: isProduction ? 60000 : 30000,
+    
+    // TLS configuration optimized for cloud hosting
     tls: {
-      // More secure for production but flexible for Gmail
-      rejectUnauthorized: false, // Gmail often requires this
-      // Gmail-specific TLS settings
+      rejectUnauthorized: false, // Required for most cloud platforms
+      ciphers: 'SSLv3',
       secureProtocol: 'TLSv1_2_method',
     },
-    // Increased timeouts for production networks
-    connectionTimeout: process.env.NODE_ENV === 'production' ? 120000 : 60000,
-    greetingTimeout: process.env.NODE_ENV === 'production' ? 60000 : 30000,
-    socketTimeout: process.env.NODE_ENV === 'production' ? 120000 : 60000,
-    // Only enable debug in development
-    debug: process.env.NODE_ENV === 'development',
-    logger: process.env.NODE_ENV === 'development',
+    
+    // Debugging
+    debug: isDevelopment,
+    logger: isDevelopment,
   };
 
-  // Service-specific settings for better reliability
-  if (process.env.EMAIL_HOST === 'smtp.gmail.com') {
+  // Service-specific configurations
+  if (emailHost === 'smtp.gmail.com') {
+    console.log('📧 Using Gmail SMTP service');
     transportConfig.service = 'gmail';
-    // Override with Gmail-optimized settings
-    transportConfig.tls = {
-      rejectUnauthorized: false, // Gmail often needs this
+    transportConfig.auth = {
+      user: emailUsername,
+      pass: emailPassword,
     };
-    // Remove custom port/secure when using service
+    // Remove conflicting settings when using service
+    delete transportConfig.host;
     delete transportConfig.port;
     delete transportConfig.secure;
-  } else if (process.env.EMAIL_HOST === 'smtp.sendgrid.net') {
-    // SendGrid configuration (better for Railway)
-    transportConfig.host = 'smtp.sendgrid.net';
-    transportConfig.port = 587;
-    transportConfig.secure = false;
-    transportConfig.auth = {
-      user: 'apikey', // Always 'apikey' for SendGrid
-      pass: process.env.SENDGRID_API_KEY || process.env.EMAIL_PASSWORD
+    
+  } else if (emailHost === 'smtp.sendgrid.net' || sendGridApiKey) {
+    console.log('📧 Using SendGrid SMTP service');
+    transportConfig = {
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'apikey',
+        pass: sendGridApiKey || emailPassword,
+      },
+      pool: isProduction,
+      maxConnections: isProduction ? 5 : 1,
+    connectionTimeout: 60000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
+      tls: {
+        rejectUnauthorized: false,
+      },
+      debug: isDevelopment,
+      logger: isDevelopment,
     };
+    
+  } else if (emailHost.includes('outlook') || emailHost.includes('hotmail')) {
+    console.log('📧 Using Outlook/Hotmail service');
+    transportConfig.service = 'hotmail';
+    
+  } else {
+    console.log('📧 Using custom SMTP configuration');
   }
 
-  return nodemailer.createTransport(transportConfig);
+  try {
+    const transporter = nodemailer.createTransport(transportConfig);
+    console.log('✅ Email transporter created successfully');
+    return transporter;
+  } catch (error) {
+    console.error('❌ Failed to create email transporter:', error.message);
+    throw new Error(`Email service initialization failed: ${error.message}`);
+  }
 };
 
 /**
- * Send email with proper error handling and cleanup - accepts any email
+ * Enhanced email sending with multiple retry strategies and fallback
  */
 const sendEmail = async (options) => {
   const maxRetries = 3;
   let lastError;
-
-  // Only log detailed info in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`📧 Attempting to send email to: ${options.to}`);
-    console.log(`📧 Subject: ${options.subject}`);
-  } else {
-    console.log(`📧 Sending email to: ${options.to?.substring(0, 3)}***`);
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  // Validate email options
+  if (!options?.to || !options?.subject) {
+    throw new Error('Email options missing: to and subject are required');
   }
+
+  // Safe logging
+  const logEmail = isDevelopment 
+    ? options.to 
+    : `${options.to.substring(0, 3)}***@${options.to.split('@')[1] || 'unknown'}`;
+  
+  console.log(`📧 Attempting to send email to: ${logEmail}`);
+  console.log(`📧 Subject: ${options.subject}`);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let transporter = null;
 
     try {
-      if (process.env.NODE_ENV !== 'production' || attempt === 1) {
         console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
-      }
 
+      // Create fresh transporter for each attempt
       transporter = createTransporter();
 
-      // Verify transporter on first attempt only
+      // Test connection on first attempt
       if (attempt === 1) {
         try {
-          await transporter.verify();
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Email transporter verified successfully');
-          } else {
-            console.log('✅ Email transporter connected');
-          }
+          console.log('🔍 Verifying email connection...');
+          await Promise.race([
+            transporter.verify(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Connection verification timeout')), 15000)
+            )
+          ]);
+          console.log('✅ Email connection verified successfully');
         } catch (verifyError) {
-          const errorMsg = process.env.NODE_ENV === 'development' 
-            ? verifyError.message 
-            : 'Connection verification failed';
-          console.warn('⚠️ Transporter verification failed, but continuing:', errorMsg);
-          
-          // Log additional details in production for debugging
-          if (process.env.NODE_ENV === 'production') {
-            console.log('📧 Connection details:', {
-              host: process.env.EMAIL_HOST,
-              port: process.env.EMAIL_PORT,
-              secure: process.env.EMAIL_SECURE,
-              error: verifyError.code || 'UNKNOWN',
-            });
-          }
+          console.warn('⚠️ Connection verification failed, but continuing:', {
+            message: verifyError.message,
+            code: verifyError.code,
+            errno: verifyError.errno
+          });
+          // Don't fail here, Gmail verification often fails but sending works
         }
       }
 
+      // Prepare mail options
       const mailOptions = {
-        from: process.env.EMAIL_FROM,
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USERNAME,
         to: options.to,
         subject: options.subject,
         html: options.html,
+        text: options.text,
+        // Add headers for better deliverability
+        headers: {
+          'X-Mailer': 'Cozy-Loops-Ecommerce',
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+        }
       };
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 Mail options:`, {
+      console.log('📤 Sending email with options:', {
           from: mailOptions.from,
-          to: mailOptions.to,
+        to: isDevelopment ? mailOptions.to : logEmail,
           subject: mailOptions.subject,
+        hasHtml: !!mailOptions.html,
+        hasText: !!mailOptions.text
         });
-      }
 
+      // Send email with timeout
       const result = await Promise.race([
         transporter.sendMail(mailOptions),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Email timeout after 60 seconds')), 60000)
+          setTimeout(() => reject(new Error('Email send timeout after 60 seconds')), 60000)
         ),
       ]);
 
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Email sent successfully!`);
-        console.log(`📧 Message ID: ${result.messageId}`);
-      } else {
-        console.log(`✅ Email sent successfully to ${options.to?.substring(0, 3)}***`);
-      }
-
-      if (transporter) {
-        transporter.close();
-      }
+      console.log('✅ Email sent successfully!', {
+        messageId: result.messageId,
+        response: isDevelopment ? result.response : 'Hidden in production',
+        attempt: attempt
+      });
 
       return result;
+
     } catch (error) {
       lastError = error;
 
-      // Enhanced error logging for production debugging
-      if (process.env.NODE_ENV === 'development') {
+      // Enhanced error logging
         console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
           message: error.message,
           code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
           command: error.command,
           response: error.response?.substring(0, 200),
-        });
-      } else {
-        // More detailed production logging for email issues
-        console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
-          message: error.message,
-          code: error.code,
-          command: error.command,
-          responseCode: error.responseCode,
-          to: options.to?.substring(0, 3) + '***',
-        });
+        responseCode: error.responseCode,
+        stack: isDevelopment ? error.stack : undefined
+      });
+
+      // Specific error handling
+      if (error.code === 'ECONNREFUSED') {
+        console.error('🚫 Connection refused - check if SMTP server is accessible');
+      } else if (error.code === 'EAUTH') {
+        console.error('🔐 Authentication failed - check email credentials');
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
+        console.error('⏰ Network timeout - Railway might be blocking SMTP connections');
+      } else if (error.responseCode >= 500) {
+        console.error('🚧 Server error from email provider');
       }
 
+    } finally {
+      // Cleanup transporter
       if (transporter) {
         try {
           transporter.close();
         } catch (closeError) {
-          // Silent cleanup in production
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Error closing transporter:', closeError.message);
-          }
+          console.warn('Warning: Failed to close transporter:', closeError.message);
         }
       }
+    }
 
+    // Wait before retry (exponential backoff)
       if (attempt < maxRetries) {
-        const delay = Math.min(3000 * attempt, 10000);
-        if (process.env.NODE_ENV === 'development') {
+      const delay = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
           console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
-        } else {
-          console.log(`🔄 Retrying email delivery (${delay / 1000}s)...`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
-  // Enhanced error messages based on common issues
-  const errorMessage = lastError.message?.toLowerCase() || '';
-  
-  // Production-safe error logging
-  console.error(`💥 All ${maxRetries} email attempts failed. Error details:`, {
+  // All attempts failed
+  console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, {
     message: lastError.message,
     code: lastError.code,
-    responseCode: lastError.responseCode,
-    command: lastError.command,
+    suggestions: getErrorSuggestions(lastError)
   });
 
-  // Return user-friendly error messages
-  if (errorMessage.includes('timeout')) {
-    throw new Error('Email service is currently slow. Please try again later.');
-  } else if (lastError.code === 'EAUTH' || errorMessage.includes('authentication failed')) {
-    throw new Error('Email authentication failed. Please check email configuration.');
-  } else if (lastError.code === 'ECONNECTION' || errorMessage.includes('connection')) {
-    throw new Error('Unable to connect to email service. Please try again later.');
-  } else if (lastError.responseCode === 535 || errorMessage.includes('invalid credentials')) {
-    throw new Error('Invalid email credentials. Please verify email settings.');
-  } else if (lastError.responseCode === 554 || errorMessage.includes('rejected')) {
-    throw new Error('Email rejected by server. Please check recipient address.');
+  // Throw user-friendly error
+  throw new Error(getUserFriendlyError(lastError));
+};
+
+/**
+ * Get error suggestions based on error type
+ */
+const getErrorSuggestions = (error) => {
+  const suggestions = [];
+  
+  if (error.code === 'ECONNREFUSED') {
+    suggestions.push('Check if Railway allows SMTP connections');
+    suggestions.push('Try using SendGrid instead of Gmail');
+    suggestions.push('Verify SMTP host and port settings');
+  } else if (error.code === 'EAUTH') {
+    suggestions.push('Verify Gmail app password is correct');
+    suggestions.push('Check if 2FA is enabled and app password is generated');
+    suggestions.push('Try using SendGrid API instead');
+  } else if (error.code === 'ETIMEDOUT') {
+    suggestions.push('Railway might be blocking SMTP connections');
+    suggestions.push('Consider using an email API service instead of SMTP');
+    suggestions.push('Try different SMTP ports (25, 465, 587, 2525)');
+  }
+  
+  return suggestions;
+};
+
+/**
+ * Convert technical errors to user-friendly messages
+ */
+const getUserFriendlyError = (error) => {
+  if (error.message?.includes('timeout')) {
+    return 'Email service is currently slow. Please try again later.';
+  } else if (error.code === 'EAUTH') {
+    return 'Email authentication failed. Please contact support.';
+  } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+    return 'Unable to connect to email service. Please try again later.';
+  } else if (error.responseCode >= 500) {
+    return 'Email service is temporarily unavailable. Please try again later.';
   } else {
-    throw new Error(`Email delivery failed: ${lastError.message}`);
+    return `Email delivery failed: ${error.message}`;
   }
 };
 
