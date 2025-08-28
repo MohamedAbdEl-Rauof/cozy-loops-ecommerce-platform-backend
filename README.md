@@ -13,6 +13,7 @@ A comprehensive RESTful API backend for the Cozy Loops E-commerce platform, buil
 - **Express.js** - Web application framework
 - **MongoDB** - NoSQL database
 - **Mongoose** - MongoDB object modeling
+- 
 
 ### Authentication & Security
 - **JWT** - JSON Web Tokens for authentication
