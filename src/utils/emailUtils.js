@@ -2,185 +2,58 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 /**
- * Create email transporter optimized for both local and production
+ * Create email transporter
  */
 const createTransporter = () => {
-  const port = parseInt(process.env.EMAIL_PORT) || 587;
-  const isSecure = process.env.EMAIL_SECURE === 'true';
-
-  console.log('📧 Email Config:', {
-    host: process.env.EMAIL_HOST,
-    port: port,
-    secure: isSecure,
-    env: process.env.NODE_ENV,
-    // Remove this in production for security
-    // EMAIL_SECURE_ENV: process.env.EMAIL_SECURE,
-  });
-
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: port,
-    secure: isSecure,
-    auth: {
-      user: process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-    pool: false,
-    maxConnections: 1,
-    maxMessages: 1,
-    tls: {
-      rejectUnauthorized: false,
-    },
-    connectionTimeout: 60000,
-    greetingTimeout: 30000,
-    socketTimeout: 60000,
-    // Only enable debug in development
-    debug: process.env.NODE_ENV === 'development',
-    logger: process.env.NODE_ENV === 'development',
-  });
+    return nodemailer.createTransporter({
+        host: process.env.EMAIL_HOST,
+        port: parseInt(process.env.EMAIL_PORT) || 587,
+        secure: process.env.EMAIL_SECURE === 'true',
+        auth: {
+            user: process.env.EMAIL_USERNAME,
+            pass: process.env.EMAIL_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    });
 };
 
 /**
- * Send email with proper error handling and cleanup - accepts any email
+ * Send email - simplified version
  */
 const sendEmail = async (options) => {
-  const maxRetries = 3;
-  let lastError;
+    const transporter = createTransporter();
 
-  // Only log detailed info in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`📧 Attempting to send email to: ${options.to}`);
-    console.log(`📧 Subject: ${options.subject}`);
-  }
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    let transporter = null;
-
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 Email attempt ${attempt}/${maxRetries}`);
-      }
-
-      transporter = createTransporter();
-
-      // Verify transporter on first attempt only
-      if (attempt === 1) {
-        try {
-          await transporter.verify();
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✅ Email transporter verified successfully');
-          }
-        } catch (verifyError) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn(
-              '⚠️ Transporter verification failed, but continuing:',
-              verifyError.message
-            );
-          }
-        }
-      }
-
-      const mailOptions = {
+    const mailOptions = {
         from: process.env.EMAIL_FROM,
         to: options.to,
         subject: options.subject,
         html: options.html,
-      };
+    };
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📧 Mail options:`, {
-          from: mailOptions.from,
-          to: mailOptions.to,
-          subject: mailOptions.subject,
-        });
-      }
-
-      const result = await Promise.race([
-        transporter.sendMail(mailOptions),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Email timeout after 60 seconds')), 60000)
-        ),
-      ]);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Email sent successfully!`);
-        console.log(`📧 Message ID: ${result.messageId}`);
-      }
-
-      if (transporter) {
+    try {
+        const result = await transporter.sendMail(mailOptions);
         transporter.close();
-      }
-
-      return result;
+        return result;
     } catch (error) {
-      lastError = error;
-
-      // Log errors differently based on environment
-      if (process.env.NODE_ENV === 'development') {
-        console.error(`❌ Email attempt ${attempt}/${maxRetries} failed:`, {
-          message: error.message,
-          code: error.code,
-          command: error.command,
-          response: error.response?.substring(0, 200),
-        });
-      } else {
-        // In production, log less detailed errors
-        console.error(`Email attempt ${attempt}/${maxRetries} failed:`, error.message);
-      }
-
-      if (transporter) {
-        try {
-          transporter.close();
-        } catch (closeError) {
-          // Silent cleanup in production
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Error closing transporter:', closeError.message);
-          }
-        }
-      }
-
-      if (attempt < maxRetries) {
-        const delay = Math.min(3000 * attempt, 10000);
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🔄 Retrying in ${delay / 1000} seconds...`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
+        transporter.close();
+        throw new Error(`Email delivery failed: ${error.message}`);
     }
-  }
-
-  // Production-safe error logging
-  if (process.env.NODE_ENV === 'development') {
-    console.error(`💥 All ${maxRetries} email attempts failed. Final error:`, lastError.message);
-  } else {
-    console.error(`Email delivery failed after ${maxRetries} attempts:`, lastError.message);
-  }
-
-  // Return user-friendly error messages
-  if (lastError.message?.includes('timeout')) {
-    throw new Error('Email service is currently slow. Please try again later.');
-  } else if (lastError.code === 'EAUTH') {
-    throw new Error('Email authentication failed. Please contact support.');
-  } else if (lastError.code === 'ECONNECTION') {
-    throw new Error('Unable to connect to email service. Please try again later.');
-  } else {
-    throw new Error(`Email delivery failed: ${lastError.message}`);
-    
-  }
 };
 
 /**
  * Generate verification token
  */
 const generateVerificationToken = () => {
-  return crypto.randomBytes(32).toString('hex');
+    return crypto.randomBytes(32).toString('hex');
 };
 
 /**
  * Create verification URL
  */
 const createVerificationUrl = (token) => {
-  return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
+    return `${process.env.USER_FRONTEND_URL}/auth/verify-email?token=${token}`;
 };
 
 /**
