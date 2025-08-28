@@ -30,6 +30,7 @@ const sendEmail = async (options) => {
         to: options.to,
         subject: options.subject,
         html: options.html,
+
     };
 
     try {
