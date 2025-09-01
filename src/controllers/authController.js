@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken, verifyToken, setTokenCookies } = require('../utils/jwtUtils');
