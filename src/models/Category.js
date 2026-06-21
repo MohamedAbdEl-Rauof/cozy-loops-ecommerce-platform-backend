@@ -85,9 +85,9 @@ categorySchema.pre('save', async function (next) {
   next();
 });
 
-categorySchema.index({ slug: 1 });
+// slug and name already declare `unique` in their field definitions (which
+// creates the index) — re-declaring here triggered duplicate-index warnings.
 categorySchema.index({ parent: 1 });
-categorySchema.index({ name: 1 });
 categorySchema.index({ isActive: 1 });
 categorySchema.index({ sortOrder: 1 });
 

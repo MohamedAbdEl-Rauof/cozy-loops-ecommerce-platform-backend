@@ -55,6 +55,11 @@ const makerSchema = new mongoose.Schema({
   message: {
     type: String,
     trim: true
+  },
+  slug: {
+    type: String,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true

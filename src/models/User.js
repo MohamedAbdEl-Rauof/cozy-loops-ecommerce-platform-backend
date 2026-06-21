@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
     match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,})+$/,
       'Please provide a valid email'
     ]
   },
@@ -122,11 +122,11 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-userSchema.index({ email: 1 }, { unique: true });
+// email, googleId and linkedinId already declare `unique` (and sparse) in the
+// schema field definitions, which creates their indexes — re-declaring them here
+// caused "Duplicate schema index" warnings, so only non-duplicate indexes remain.
 userSchema.index({ emailVerificationToken: 1 });
 userSchema.index({ resetPasswordToken: 1 });
-userSchema.index({ googleId: 1 }, { sparse: true });
-userSchema.index({ linkedinId: 1 }, { sparse: true });
 userSchema.index({ createdAt: 1 });
 userSchema.index({ emailVerified: 1, active: 1 });
 
