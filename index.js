@@ -110,6 +110,21 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
+  // Mongoose: invalid ObjectId (e.g. /api/products/undefined) -> 404 instead of 500
+  if (err.name === 'CastError') {
+    return res.status(404).json({ success: false, message: 'Resource not found' });
+  }
+  // Mongoose: schema validation failure -> 400 with field messages
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map((e) => e.message);
+    return res.status(400).json({ success: false, message: 'Validation failed', errors });
+  }
+  // Mongoose: duplicate unique key -> 409
+  if (err.code === 11000) {
+    const field = Object.keys(err.keyValue || {})[0];
+    return res.status(409).json({ success: false, message: `Duplicate value for ${field || 'field'}` });
+  }
+
   const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(statusCode).json({
     success: false,

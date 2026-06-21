@@ -220,7 +220,6 @@ cartSchema.index({ user: 1, status: 1 }, {
     partialFilterExpression: { status: 'active' }
 });
 
-cartSchema.index({ user: 1, status: 1 });
 cartSchema.index({ orderId: 1 });
 
 module.exports = mongoose.model('Cart', cartSchema);

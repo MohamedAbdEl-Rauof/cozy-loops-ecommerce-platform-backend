@@ -18,7 +18,9 @@ const initSocket = (server) => {
                 return next(new Error('Authentication error'));
             }
 
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            // Verify with the access-token secret (was incorrectly JWT_SECRET,
+            // which is undefined — socket auth always failed).
+            const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
             socket.userId = decoded.id;
             next();
         } catch (err) {
