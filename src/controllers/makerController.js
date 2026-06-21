@@ -93,10 +93,14 @@ exports.getMakerProducts = async (req, res) => {
     const limit = parseInt(req.query.limit) || 12;
     const skip = (page - 1) * limit;
 
-    const maker = await Maker.findOne({
-      $or: [{ _id: id }, { slug: id }],
-      isActive: true
-    });
+    // Look up by slug, or by _id only when the param is a valid ObjectId
+    // (passing a slug as _id throws a CastError).
+    const mongoose = require('mongoose');
+    const maker = await Maker.findOne(
+      mongoose.Types.ObjectId.isValid(id)
+        ? { $or: [{ _id: id }, { slug: id }], isActive: true }
+        : { slug: id, isActive: true }
+    );
 
     if (!maker) {
       return res.status(404).json({
